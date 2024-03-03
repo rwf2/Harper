@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "lib",
+    "mockingbird",
+]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = 3
+# strip = true
+debug = 2
