@@ -1,0 +1,76 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - v[0-9]+.*
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create-release:
+    name: "GitHub Release"
+    if: github.repository_owner == 'rwf2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          title: Mockingbird $tag
+          branch: master
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    name: "Upload ${{ matrix.target }} Binaries"
+    timeout-minutes: 60
+    if: github.repository_owner == 'rwf2'
+    needs:
+      - create-release
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+          - target: aarch64-unknown-linux-musl
+          - target: aarch64-apple-darwin
+            os: macos-11
+          - target: aarch64-pc-windows-msvc
+            os: windows-2019
+          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
+          - target: x86_64-apple-darwin
+            os: macos-11
+          - target: x86_64-pc-windows-msvc
+            os: windows-2019
+          - target: x86_64-unknown-freebsd
+          - target: universal-apple-darwin
+            os: macos-11
+    runs-on: ${{ matrix.os || 'ubuntu-20.04' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Configure Cross Compiler
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: Set RUSTFLAGS
+        run: |
+          if [[ ${{ matrix.target }} == *-windows-msvc ]]; then
+            echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
+          elif [[ ${{ matrix.target }} == *-linux-musl ]]; then
+            echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >> "${GITHUB_ENV}"
+          fi
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: mockingbird
+          target: ${{ matrix.target }}
+          archive: $bin-$tag-$target
+          tar: all
+          zip: windows
+          token: ${{ secrets.GITHUB_TOKEN }}
