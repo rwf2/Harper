@@ -31,10 +31,10 @@ impl SyntaxHighlight {
 }
 
 impl Plugin for SyntaxHighlight {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(Highlighter { generator: None, lines: 0, inner: events })
+        Highlighter { generator: None, lines: 0, inner: events }
     }
 }
 

@@ -32,9 +32,9 @@ pub fn render_collection<R>(
     where R: Renderer + ?Sized
 {
     rayon::join(
-        || collection.items.sort_by(|a, b| a.entry().path.cmp(&b.entry().path)),
+        || collection.items.sort_by(|a, b| a.entry.path.cmp(&b.entry.path)),
         || collection.data.par_iter().for_each(|(_, l)| {
-            l.sort_by(|a, b| a.entry().path.cmp(&b.entry().path))
+            l.sort_by(|a, b| a.entry.path.cmp(&b.entry.path))
         }),
     );
 

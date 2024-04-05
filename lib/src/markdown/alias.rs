@@ -19,10 +19,10 @@ impl<'a> Alias<'a> {
 }
 
 impl crate::markdown::Plugin for Alias<'_> {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(AliasIterator { inner: events, map: self.map })
+        AliasIterator { inner: events, map: self.map }
     }
 }
 

@@ -5,6 +5,7 @@ pub unsafe trait Variation {
 #[macro_export]
 macro_rules! declare_variation {
     ($v:vis $V:ident of $T:ty) => {
+        #[derive(Debug)]
         #[repr(transparent)]
         $v struct $V(pub $T);
 

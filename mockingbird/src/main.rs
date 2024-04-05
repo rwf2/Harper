@@ -1,16 +1,20 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
+use std::path::Path;
 
-use harper::Renderer;
+use harper::{Renderer, Site};
+use harper::error::Result;
 use harper::value::Value;
 use harper::path_str::PathStr;
+use harper::templating::minijinja::MiniJinjaEngine;
 use harper::url::Url;
 
-use crate::discover::Mockingbird;
-
+#[macro_use]
+mod util;
 mod config;
 mod discover;
 mod render;
-mod util;
+
+use crate::discover::Mockingbird;
 
 pub const CONTENT_DIR: &str = "content";
 pub const TEMPLATE_DIR: &str = "templates";
@@ -36,30 +40,50 @@ harper::define_meta_key! {
     pub Snip : "snippet" => Arc<str>,
 }
 
-pub fn main() {
+pub fn run(input: &Path, output: &Path) -> Result<Arc<Site>> {
+    let mockingbird = Mockingbird::new::<MiniJinjaEngine, _, _>(input, output)?;
+    let site = Arc::new(mockingbird.discover()?);
+    mockingbird.render_site(&site)?;
+    Ok(site)
+}
+
+mod flags {
     use std::path::PathBuf;
-    use harper::templating::minijinja::MiniJinjaEngine;
 
-    let mut args = std::env::args().skip(1);
-    let input = PathBuf::from(args.next().expect("<input>"));
-    let output = PathBuf::from(args.next().expect("<output>"));
+    xflags::xflags! {
+        /// Your friendly neighborhood bird.
+        cmd mockingbird {
+            /// Build a site.
+            default cmd build {
+                /// Directory containing the site sources
+                required input: PathBuf
+                /// Where to write the site to
+                required output: PathBuf
+                /// quiet: don't emit anything
+                optional -q,--quiet
+            }
+            /// Print the version and exit.
+            cmd version { }
+        }
+    }
+}
 
-    let start = std::time::SystemTime::now();
+pub fn main() {
     harper::markdown::SyntaxHighlight::warm_up();
-    let result = Mockingbird::new::<MiniJinjaEngine, _, _>(input, output)
-        .and_then(|mockingbird| Ok((mockingbird.discover()?, mockingbird)))
-        .and_then(|(site, mockingbird)| {
-            let site = Arc::new(site);
-            println!("discovery time: {}ms", start.elapsed().unwrap().as_millis());
-            let render = std::time::SystemTime::now();
-            let result = mockingbird.render_site(&site);
-            println!("render time: {}ms", render.elapsed().unwrap().as_millis());
-            println!("total time: {}ms", start.elapsed().unwrap().as_millis());
-            site.visualize();
-            result
-        });
 
-    if let Err(e) = result {
-        println!("error: {e}");
+    match flags::Mockingbird::from_env_or_exit().subcommand {
+        flags::MockingbirdCmd::Build(args) => {
+            let site = run(&args.input, &args.output).unwrap_or_else(|e| {
+                eprintln!("error: {e}");
+                std::process::exit(1)
+            });
+
+            if !args.quiet {
+                site.visualize();
+            }
+        }
+        flags::MockingbirdCmd::Version(_) => {
+            println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        }
     }
 }

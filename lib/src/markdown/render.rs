@@ -17,17 +17,16 @@ impl<O: Sink> Renderer<O> {
 }
 
 impl<O: Sink> Plugin for Renderer<O> {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>>
     {
         let mut html_output = String::new();
         html::push_html(&mut html_output, events);
         self.rendered = html_output;
-        Box::new(std::iter::empty())
+        std::iter::empty()
     }
 
     fn finalize(&mut self) -> Result<()> {
-        let string = std::mem::replace(&mut self.rendered, String::new());
-        self.output.write(string)
+        self.output.write(std::mem::take(&mut self.rendered))
     }
 }

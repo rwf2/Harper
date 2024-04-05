@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use derive_more::Debug;
 use rustc_hash::FxHashMap;
 
 use crate::fstree::{EntryId, FsTree};
@@ -8,20 +7,29 @@ use crate::taxonomy::*;
 
 #[derive(Debug)]
 pub struct Site {
-    #[debug(ignore)]
     pub tree: Arc<FsTree>,
     pub items: Vec<Arc<Item>>,
     pub collections: FxHashMap<EntryId, Arc<Collection>>,
+    pub index: FxHashMap<Arc<str>, EntryId>,
 }
 
 impl Site {
     pub fn new(tree: Arc<FsTree>) -> Site {
-        Site { tree, collections: FxHashMap::default(), items: vec![] }
+        Site { tree, items: vec![], collections: Default::default(), index: Default::default() }
     }
 
-    pub fn get_or_insert_collection(&mut self, root: EntryId) -> &mut Collection {
-        let arc = self.collections.entry(root)
-            .or_insert_with(|| Arc::new(Collection::new(self.tree.clone(), root)));
+    /// Panics if `name` is not unique to `root`.
+    pub fn get_or_insert_collection(
+        &mut self,
+        name: impl FnOnce() -> Arc<str>,
+        root: EntryId
+    ) -> &mut Collection {
+        let arc = self.collections.entry(root).or_insert_with(|| {
+            let name = name();
+            let collection = Arc::new(Collection::new(name.clone(), self.tree.clone(), root));
+            assert!(self.index.insert(name, root).is_none());
+            collection
+        });
 
         Arc::get_mut(arc).expect("&mut -> &mut")
     }
@@ -54,29 +62,29 @@ impl Site {
 
         for (i, collection) in self.collections.values().enumerate() {
             let i_sib = i < self.collections.len() - 1;
-            self.vis_heading(&[i_sib], collection.root, self.tree.root_id(), "");
+            self.vis_heading(&[i_sib], collection.entry.id, self.tree.root_id(), "");
 
             for (j, (&data_id, data_items)) in collection.data.iter().enumerate() {
                 let j_sib = !collection.items.is_empty()
                     || collection.index.is_some()
                     || j < collection.data.len() - 1;
 
-                self.vis_heading(&[i_sib, j_sib], data_id, collection.root, "📦 ");
+                self.vis_heading(&[i_sib, j_sib], data_id, collection.entry.id, "📦 ");
 
                 for (k, item) in data_items.iter().enumerate() {
                     let k_sib = k < data_items.len() - 1;
-                    self.vis_heading(&[i_sib, j_sib, k_sib], item.id, data_id, "💾 ");
+                    self.vis_heading(&[i_sib, j_sib, k_sib], item.entry.id, data_id, "💾 ");
                 }
             }
 
             if let Some(item) = &collection.index {
                 let j_sib = !collection.items.is_empty();
-                self.vis_heading(&[i_sib, j_sib], item.id, collection.root, "📑 ");
+                self.vis_heading(&[i_sib, j_sib], item.entry.id, collection.entry.id, "📑 ");
             }
 
             for (j, item) in collection.items.iter().enumerate() {
                 let j_sib = j < collection.items.len() - 1;
-                self.vis_heading(&[i_sib, j_sib], item.id, collection.root, "📝 ");
+                self.vis_heading(&[i_sib, j_sib], item.entry.id, collection.entry.id, "📝 ");
             }
         }
     }

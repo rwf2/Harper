@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 
+use harper::{err, Collection, Site};
 use harper::fstree::{EntryId, FsTree};
 use harper::templating::EngineInit;
 use harper::error::Result;
 use harper::templating::minijinja::MiniJinjaEngine;
-use harper::{err, Collection, Site};
 
 use crate::{ASSETS_DIR, CONTENT_DIR, TEMPLATE_DIR, PermaPath};
 use crate::config::Config;
@@ -79,12 +79,18 @@ impl Mockingbird {
         // Find all collections, as identified by the presence of an index file.
         for index in index_files {
             let group_dir = &self.tree[index.parent.unwrap()];
-            let collection = site.get_or_insert_collection(group_dir.id);
+            let collection = site.get_or_insert_collection(|| {
+                group_dir.path_relative_to(content_root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into()
+            }, group_dir.id);
+
             if let Some(ref existing) = collection.index {
                 return err!(
                     "found multiple index files for a single collection",
                     "faulting collection", group_dir.path.display(),
-                    "first index" => existing.tree[existing.id].path.display(),
+                    "first index" => existing.entry.path.display(),
                     "second index" => index.path.display(),
                 );
             }
@@ -116,12 +122,10 @@ impl Mockingbird {
         for entry in files {
             let collection = match self.parent(site, entry.id) {
                 Some(collection) => collection,
-                None => site.get_or_insert_collection(content_root.id),
+                None => site.get_or_insert_collection(|| "/".into(), content_root.id),
             };
 
-            // let known = entry.file_ext().map_or(false, |ext| RECOGNIZED_EXTS.contains(&ext));
-            let collection_entry = &tree[collection.root];
-            if entry.depth - collection_entry.depth <= 1 {
+            if entry.depth - collection.entry.depth <= 1 {
                 collection.new_item(entry.id);
             } else {
                 collection.new_datum(entry.parent.unwrap(), entry.id);

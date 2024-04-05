@@ -53,3 +53,14 @@ pub fn dircheck<P: AsRef<Path>>(
         },
     }
 }
+
+#[macro_export]
+macro_rules! time {
+    ($e:expr) => {{
+        let start = std::time::Instant::now();
+        let result = $e;
+        let elapsed = start.elapsed();
+        println!("{} took {}ms", stringify!($e), elapsed.as_millis());
+        result
+    }};
+}

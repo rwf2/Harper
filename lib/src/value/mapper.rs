@@ -64,7 +64,7 @@ macro_rules! impl_format {
 impl_format!(Toml: toml::from_str, toml::de::Error);
 impl_format!(Json: serde_json::from_str, serde_json::error::Error);
 
-#[derive(derive_more::From, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Grass {
     options: grass::Options<'static>,
 }

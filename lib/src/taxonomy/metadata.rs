@@ -3,8 +3,6 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use derive_more::Debug;
-
 use crate::value::{Source, Sink};
 use crate::error::Result;
 use crate::value::Value;
@@ -14,7 +12,7 @@ type Hasher = std::hash::BuildHasherDefault<rustc_hash::FxHasher>;
 pub trait MetaKey: 'static {
     const KEY: &'static str;
 
-    type Value: TryFrom<Value> + Into<Value> + Debug;
+    type Value: TryFrom<Value> + Into<Value> + fmt::Debug;
 }
 
 #[macro_export]
@@ -31,7 +29,7 @@ macro_rules! define_meta_key {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Key<'m, 'k, V> {
     map: &'m Metadata,
     key: &'k str,
@@ -169,6 +167,15 @@ impl Metadata {
     //         self.insert_raw(k.into(), v.into());
     //     }
     // }
+}
+
+impl<V> fmt::Debug for Key<'_, '_, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Key")
+            .field("map", &self.map)
+            .field("key", &self.key)
+            .finish()
+    }
 }
 
 impl fmt::Display for Metadata {

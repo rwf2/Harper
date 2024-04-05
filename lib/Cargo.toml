@@ -1,6 +1,6 @@
 [package]
 name = "harper"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 license = "MIT OR Apache-2.0"
@@ -23,7 +23,6 @@ serde = { version = "1", features = ["rc", "derive"] }
 toml = { version = "0.8", features = ["preserve_order"] }
 memchr = "2"
 either = "1.10"
-derive_more = { version = "=1.0.0-beta.6", features = ["debug", "deref", "from"] }
 grass = { version = "0.13", default-features = false, features = ["random"], optional = true }
 pulldown-cmark = { version = "0.10", default-features = false, features = ["simd", "html"] }
 
@@ -56,11 +55,8 @@ default-features = false
 features = ["html", "default-syntaxes", "regex-onig", "plist-load"]
 
 [dependencies.minijinja]
-# git = "https://github.com/SergioBenitez/minijinja.git"
-# # branch = "value-unification"
-# rev = "517d147"
 package = "unified-minijinja"
-version = "1.0.12"
+version = "=0.0.2"
 default-features = false
 features = ["speedups", "loader", "builtins", "debug", "deserialization", "macros", "multi_template"]
 

@@ -1,14 +1,12 @@
+use std::{fs, fmt};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::path::Path;
 use std::collections::VecDeque;
-use std::{fs, fmt};
 
 use rustc_hash::FxHashMap;
 
 use crate::error::Result;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct EntryId(pub(crate) usize);
 
 #[derive(Debug)]
 pub struct FsTree {
@@ -16,9 +14,13 @@ pub struct FsTree {
     map: FxHashMap<Arc<Path>, EntryId>,
 }
 
-pub struct FsSubTree<'a> {
-    tree: &'a FsTree,
-    root: EntryId
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct EntryId(usize);
+
+#[derive(Clone)]
+pub struct OwnedEntry {
+    pub tree: Arc<FsTree>,
+    pub id: EntryId,
 }
 
 #[derive(Debug)]
@@ -44,10 +46,12 @@ impl FsTree {
         }
     }
 
+    #[inline(always)]
     pub fn build<P: AsRef<Path>>(root: P) -> Result<Self> {
         Self::build_with(root.as_ref(), |_, _| Ok(()))
     }
 
+    #[inline]
     pub fn build_with<P, F>(root: P, mut callback: F) -> Result<Self>
         where P: AsRef<Path>,
               F: FnMut(&Self, EntryId) -> Result<()>,
@@ -89,12 +93,6 @@ impl FsTree {
 
     pub fn root_id(&self) -> EntryId {
         EntryId(0)
-    }
-
-    #[inline]
-    pub fn subtree(&self, root: EntryId) -> FsSubTree<'_> {
-        assert!(self[root].id == root);
-        FsSubTree { tree: self, root }
     }
 
     #[inline]
@@ -227,21 +225,37 @@ impl FsTree {
     }
 }
 
-impl FsSubTree<'_> {
-    pub fn get<P: AsRef<Path>>(&self, path: P) -> Option<&Entry> {
-        self.tree.get(self.root, path.as_ref())
+impl OwnedEntry {
+    pub fn new(tree: Arc<FsTree>, id: EntryId) -> Self {
+        OwnedEntry { tree, id  }
     }
 
-    #[inline]
-    pub fn get_file_id<P: AsRef<Path>>(&self, path: P) -> Option<EntryId> {
-        self.tree.get_file_id(self.root, path.as_ref())
-    }
-
-    #[inline]
-    pub fn get_id<P: AsRef<Path>>(&self, path: P) -> Option<EntryId> {
-        self.tree.get_id(self.root, path.as_ref())
+    pub fn entry(&self) -> &Entry {
+        &self.tree[self.id]
     }
 }
+
+impl Deref for OwnedEntry {
+    type Target = Entry;
+
+    fn deref(&self) -> &Self::Target {
+        self.entry()
+    }
+}
+
+impl fmt::Debug for OwnedEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.entry().fmt(f)
+    }
+}
+
+impl PartialEq for OwnedEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for OwnedEntry { }
 
 impl Entry {
     /// File name without the extension.

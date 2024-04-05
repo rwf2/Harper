@@ -52,11 +52,12 @@ impl<O: Sink> TableOfContents<O> {
 }
 
 impl<O: Sink> Plugin for TableOfContents<O> {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
         self.reset();
-        Box::new(events.inspect(|ev| match ev {
+
+        events.inspect(|ev| match ev {
             Event::Start(Tag::Heading { level, id, .. }) => {
                 self.entry = Some(Entry {
                     title: String::new(),
@@ -75,7 +76,7 @@ impl<O: Sink> Plugin for TableOfContents<O> {
                 }
             }
             _ => {}
-        }))
+        })
     }
 
     fn finalize(&mut self) -> Result<()> {

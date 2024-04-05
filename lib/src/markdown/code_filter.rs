@@ -40,15 +40,15 @@ impl CodeTrim<()> {
 }
 
 impl<F: CodeFilter> Plugin for CodeTrim<F> {
-    fn remap<'a, I>(&'a mut self, i: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, i: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(Iter {
+        Iter {
             trimmer: &mut self.trimmer,
             inner: i,
             line_num: None,
             stack: VecDeque::new(),
-        })
+        }
     }
 }
 

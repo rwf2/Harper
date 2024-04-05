@@ -1,9 +1,8 @@
+use core::fmt;
+
 use rayon::prelude::*;
 use rayon::iter::plumbing::*;
-use derive_more::Debug;
 
-#[derive(Debug)]
-#[debug("{items:?}")]
 pub struct List<T> {
     ordering: parking_lot::RwLock<Option<Vec<usize>>>,
     items: boxcar::Vec<T>,
@@ -47,6 +46,12 @@ impl<T> List<T> {
             slice: Slice::new(self, 0, self.len()),
             next: 0,
         }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for List<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 

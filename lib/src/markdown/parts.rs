@@ -55,7 +55,7 @@ impl<O: Sink> Plugin for Parts<O> {
     // secion. This causes the HTML renderer to emit the string so far. We then
     // reuse the same iterator in the renderer again until it signals it cannot
     // be reused. We finally return one string containing all of the HTML.
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
         let mut sections = SectionIterator {
@@ -84,7 +84,7 @@ impl<O: Sink> Plugin for Parts<O> {
             _ => self.sections.join("").into(),
         };
 
-        Box::new(Some(Event::Html(complete_html)).into_iter())
+        Some(Event::Html(complete_html)).into_iter()
     }
 
     fn finalize(&mut self) -> Result<()> {

@@ -39,17 +39,17 @@ impl Renderer for Mockingbird {
                         .render(template.as_str(), site, Some(collection), item)
                         .chain_with(|| error! {
                             "failed to render item",
-                            "path" => item.entry().relative_path().display(),
+                            "path" => item.entry.relative_path().display(),
                             "template used" => template.as_str(),
                         })?)
                 },
                 None => {
-                    let content: Arc<str> = item.entry().try_read()?;
+                    let content: Arc<str> = item.entry.try_read()?;
                     if !harper::util::is_template(&*content) {
                         return output.write(content);
                     }
 
-                    let name = item.entry().relative_path().to_string_lossy();
+                    let name = item.entry.relative_path().to_string_lossy();
                     output.write(self.config.engine
                         .render_raw(Some(&*name), &content, site, Some(collection), item)
                         .chain_with(|| error! {
@@ -74,7 +74,7 @@ impl Renderer for Mockingbird {
             return Ok(());
         }
 
-        let entry = item.entry();
+        let entry = &*item.entry;
         match entry.file_ext() {
             Some("md") | Some("mdown") | Some("markdown") => {
                 let engine = self.config.engine.clone();
@@ -111,10 +111,10 @@ impl Renderer for Mockingbird {
 
         // Computte the permapath and Url.
         let content_root = &self.tree[self.content_root];
-        let group_perma = collection.root_entry().path_relative_to(content_root).unwrap();
+        let group_perma = collection.entry.path_relative_to(content_root).unwrap();
         let rendered = entry.file_ext().map_or(false, |e| KNOWN_EXTS.contains(&e));
         let slug = item.metadata
-            .get_or_insert_with(Slug, || item.entry().file_stem().slugify())
+            .get_or_insert_with(Slug, || item.entry.file_stem().slugify())
             .map_err(|v| v.type_err(Slug, "invalid slug"))?;
 
         let (permapath, mut url): (Cow<'_, Path>, _) = match (kind, rendered) {
@@ -133,7 +133,7 @@ impl Renderer for Mockingbird {
             }
             (Kind::Datum(_), true) => return Ok(()),
             (_, false) => {
-                let path = item.entry()
+                let path = item.entry
                     .path_relative_to(content_root)
                     .unwrap();
 
@@ -177,7 +177,7 @@ impl Renderer for Mockingbird {
 
     fn render_site_item(&self, item: &Item) -> Result<()> {
         // TODO: Add cache key `?HASH`?
-        let entry = item.entry();
+        let entry = &*item.entry;
         let permapath = match item.metadata.get(PermaPath) {
             Some(perma) => perma.map_err(|v| v.type_err(PermaPath, entry.path.display()))?,
             None => return Ok(()),

@@ -133,7 +133,6 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for Highlighter<I> {
                         .unwrap_or(&*label);
 
                     self.code = String::new();
-                    // self.config = time!(find_ts_highlight_config(lang));
                     self.config = find_ts_highlight_config(lang);
                 }
                 Event::Text(text) if self.config.is_some() => {

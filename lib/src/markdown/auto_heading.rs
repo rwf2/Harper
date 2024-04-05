@@ -54,14 +54,14 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for HeadingIterator<'a, I> {
 }
 
 impl Plugin for AutoHeading {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(HeadingIterator {
+        HeadingIterator {
             seen: FxHashMap::default(),
             inner: events,
             stack: VecDeque::with_capacity(4),
-        })
+        }
     }
 }
 
@@ -92,12 +92,12 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for AnchorIterator<'a, I> {
 }
 
 impl Plugin for HeadingAnchor {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(AnchorIterator {
+        AnchorIterator {
             inner: events,
             pending: None,
-        })
+        }
     }
 }

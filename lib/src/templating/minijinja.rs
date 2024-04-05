@@ -13,6 +13,7 @@ pub struct MiniJinjaEngine {
     env: Result<Environment<'static>>,
 }
 
+#[derive(Debug)]
 pub struct SiteItem {
     pub site: Arc<Site>,
     pub collection: Option<Arc<Collection>>,
@@ -23,12 +24,12 @@ impl SiteItem {
     pub fn is_index(&self) -> bool {
         self.collection.as_ref()
             .and_then(|c| c.index.as_ref())
-            .map_or(false, |i| i.id == self.item.id)
+            .map_or(false, |i| i.entry.id == self.item.entry.id)
     }
 
     pub fn position(&self) -> Option<usize> {
         self.collection.as_ref()
-            .and_then(|c| c.items.iter().position(|i| i.id == self.item.id))
+            .and_then(|c| c.items.iter().position(|i| i.entry.id == self.item.entry.id))
     }
 }
 
@@ -38,6 +39,8 @@ fn try_init<G: Serialize>(
     globals: G,
 ) -> Result<Environment<'static>> {
     let mut env = Environment::new();
+    env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+
     if let Some(root) = root {
         env.set_loader(path_loader(&tree[root].path));
     }
@@ -86,6 +89,7 @@ fn try_init<G: Serialize>(
     env.add_filter("deslug", ext::deslug);
     env.add_filter("date", ext::date);
     env.add_filter("split", ext::split);
+    env.add_filter("get", ext::get);
     Ok(env)
 }
 
@@ -113,7 +117,7 @@ impl Engine for MiniJinjaEngine {
             item: item.clone()
         };
 
-        Ok(template.render(Value::from_map_object(site_item))?)
+        Ok(template.render(Value::from_object(site_item))?)
     }
 
     fn render_raw(
@@ -131,7 +135,7 @@ impl Engine for MiniJinjaEngine {
             item: item.clone()
         };
 
-        let context = Value::from_map_object(site_item);
+        let context = Value::from_object(site_item);
         let string = match name {
             Some(name) => env.render_named_str(name, template_str, context)?,
             None => env.render_str(template_str, context)?,
@@ -147,7 +151,7 @@ impl Engine for MiniJinjaEngine {
         meta: Metadata,
     ) -> Result<String> {
         let env = self.env.as_ref().map_err(|e| e.clone())?;
-        let context = Value::from_map_object(meta);
+        let context = Value::from_object(meta);
         let string = match name {
             Some(name) => env.render_named_str(name, template_str, context)?,
             None => env.render_str(template_str, context)?,
@@ -161,7 +165,7 @@ mod ext {
     use std::sync::Arc;
 
     use chrono::{NaiveDate, NaiveTime, DateTime, Utc};
-    use minijinja::{value::{intern, Rest, Value}, Error, ErrorKind, State};
+    use minijinja::{value::{intern, DynObject, Rest, Value}, Error, ErrorKind, State};
 
     use crate::url::Url;
 
@@ -228,7 +232,7 @@ mod ext {
         use chrono::naive::NaiveDateTime;
 
         if let Ok(ts) = value.clone().try_into() {
-            let datetime = NaiveDateTime::from_timestamp_opt(ts, 0)
+            let datetime = DateTime::from_timestamp(ts, 0)
                 .ok_or_else(|| Error::new(
                     ErrorKind::InvalidOperation,
                     "invalid timestamp provided to `date`"
@@ -271,57 +275,48 @@ mod ext {
             .unwrap()
             .as_secs()
     }
+
+    pub fn get(map: DynObject, key: &str, default: Value) -> Value {
+        map.get_value(&Value::from(key)).unwrap_or(default)
+    }
 }
 
 mod value_object {
+    use std::fmt::Debug;
     use std::sync::Arc;
-    use minijinja::value::{AnyMapObject, MapObject, SeqObject, Value};
+    use minijinja::value::{DynObject, Enumerator, Object, ObjectExt, ObjectRepr, Value};
 
     use crate::value;
     use crate::util::declare_variation;
 
     declare_variation!(Dict of value::Dict);
-    declare_variation!(Array of Vec<value::Value>);
 
-    impl MapObject for Dict {
-        fn get_field(self: &Arc<Self>, key: &Value) -> Option<Value> {
+    impl Object for Dict {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
+        }
+
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             self.0.get(key.as_str()?)
                 .cloned()
                 .map(Value::from)
         }
 
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            self.0.keys()
-                .cloned()
-                .map(Value::from)
-                .collect()
-        }
-
-        fn field_count(self: &Arc<Self>) -> usize {
-            self.0.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_rev_enumerator(|this| Box::new({
+                this.keys().cloned().map(Value::from)
+            }))
         }
     }
 
-    impl SeqObject for Array {
-        fn get_item(self: &Arc<Self>, idx: usize) -> Option<Value> {
-            self.0.get(idx)
-                .cloned()
-                .map(Value::from)
+    impl<T: Clone + Debug + Into<DynObject> + Sync + Send> Object for value::List<T> {
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+            let item = self.get(key.as_usize()?)?.clone();
+            Some(Value::from_dyn_object(item.into()))
         }
 
-        fn item_count(self: &Arc<Self>) -> usize {
-            self.0.len()
-        }
-    }
-
-    impl<T: Clone + Into<AnyMapObject>> SeqObject for value::List<T> {
-        fn get_item(self: &Arc<Self>, idx: usize) -> Option<Value> {
-            let item = self.get(idx)?.clone();
-            Some(Value::from(item.into()))
-        }
-
-        fn item_count(self: &Arc<Self>) -> usize {
-            self.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Seq(Self::len(self))
         }
     }
 
@@ -338,29 +333,37 @@ mod value_object {
                 },
                 Value::String(s) => Self::from(s),
                 Value::Path(s) => Self::from(s.into::<Arc<str>>()),
-                Value::Array(a) => Self::from_any_seq_object(Array::new(a)),
-                Value::Dict(d) => Self::from_any_map_object(Dict::new(d)),
+                Value::Array(a) => Self::from_dyn_object(a),
+                Value::Dict(d) => Self::from_dyn_object(Dict::new(d)),
             }
         }
     }
 }
 
 mod taxonomy_object {
-    use std::{path::Path, sync::Arc};
-    use minijinja::value::{intern, MapObject, SeqObject, Value};
+    use std::{sync::Arc};
+    use minijinja::value::{Enumerator, Object, ObjectExt, ObjectRepr, Value};
 
     use super::SiteItem;
-    use crate::{declare_variation, taxonomy::{Collection, Item, Metadata, Site}};
+    use crate::{declare_variation, taxonomy::{Collection, Item, Metadata, Site}, value::List};
 
+    declare_variation!(SiteItems of Site);
     declare_variation!(SiteCollections of Site);
+    declare_variation!(CollectionItems of Collection);
     declare_variation!(CollectionData of Collection);
 
-    impl MapObject for SiteItem {
+    // FIXME: Use `this` or `item` to refer to the item to avoid key collisions
+    // between our keys here and the keys in `self.item`.
+    impl Object for SiteItem {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
+        }
+
         #[inline]
-        fn get_field(self: &Arc<Self>, name: &Value) -> Option<Value> {
+        fn get_value(self: &Arc<Self>, name: &Value) -> Option<Value> {
             let value = match name.as_str()? {
-                "site" => Value::from_any_map_object(self.site.clone()),
-                "collection" => Value::from_any_map_object(self.collection.as_ref()?.clone()),
+                "site" => Value::from_dyn_object(self.site.clone()),
+                "collection" => Value::from_dyn_object(self.collection.as_ref()?.clone()),
                 "position" => self.position()?.into(),
                 "is_index" => self.is_index().into(),
                 "next" => {
@@ -370,7 +373,7 @@ mod taxonomy_object {
                         .or_else(|| self.position().map(|i| i.saturating_add(1)))?;
 
                     let next = collection.items.get(j)?;
-                    Value::from_any_map_object(next.clone())
+                    Value::from_dyn_object(next.clone())
                 },
                 "previous" => {
                     let collection = self.collection.as_ref()?;
@@ -379,183 +382,157 @@ mod taxonomy_object {
                         i => collection.items.get(i - 1)?,
                     };
 
-                    Value::from_any_map_object(item.clone())
+                    Value::from_dyn_object(item.clone())
                 }
-                _ => self.item.get_field(name)?,
+                _ => self.item.get_value(name)?,
             };
 
             Some(value)
         }
 
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            let mut item_keys = self.item.fields();
-            // TODO: if the item already contains fields with any of the names
-            // below, we're going to duplicate them. is that okay?
-            item_keys.extend_from_slice(&[
-                intern("site").into(),
-                intern("collection").into(),
-                intern("position").into(),
-                intern("is_index").into(),
-                intern("next").into(),
-                intern("previous").into(),
-            ]);
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_enumerator(|this| Box::new({
+                let keys = &["site", "collection", "position", "is_index", "next", "previous"];
+                let unique_keys = keys.into_iter()
+                    .filter(|x| !this.item.metadata.contains_key(x))
+                    .map(|x| Value::from(*x));
 
-            item_keys
-        }
-
-        fn field_count(self: &Arc<Self>) -> usize {
-            self.item.field_count() + 6
+                this.item.metadata.fields().chain(unique_keys)
+            }))
         }
     }
 
-    impl MapObject for Site {
-        fn get_field(self: &Arc<Self>, key: &Value) -> Option<Value> {
+    impl Object for Site {
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             let value = match key.as_str()? {
-                "items" => Value::from_any_seq_object(self.clone()),
-                "collections" => Value::from_any_map_object(SiteCollections::new(self.clone())),
+                "items" => Value::from_dyn_object(SiteItems::new(self.clone())),
+                "collections" => Value::from_dyn_object(SiteCollections::new(self.clone())),
                 _ => return None,
             };
 
             Some(value)
         }
 
-        fn static_fields(&self) -> Option<&'static [&'static str]> {
-            Some(&["items", "collections"])
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Str(&["items", "collections"])
         }
     }
 
-    impl SeqObject for Site {
-        fn get_item(self: &Arc<Self>, idx: usize) -> Option<Value> {
-            Some(Value::from_any_map_object(self.items.get(idx)?.clone()))
+    impl Object for SiteItems {
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+            let value = self.items.get(key.as_usize()?)?;
+            Some(Value::from_dyn_object(value.clone()))
         }
 
-        fn item_count(self: &Arc<Self>) -> usize {
-            self.items.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Seq(self.items.len())
         }
     }
 
-    impl MapObject for SiteCollections {
-        fn get_field(self: &Arc<Self>, key: &Value) -> Option<Value> {
-            let name = key.as_str()?;
-            let id = self.collections.keys()
-                .find(|id| self.tree[**id].relative_path() == Path::new(name))?;
+    impl Object for SiteCollections {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
+        }
 
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+            let id = self.index.get(key.as_str()?)?;
             let collection = self.collections.get(id)?.clone();
-            Some(Value::from_any_map_object(collection))
+            Some(Value::from_dyn_object(collection))
         }
 
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            self.collections.values()
-                .map(|c| c.root_entry().relative_path())
-                .filter_map(|p| p.to_str())
-                .map(Value::from)
-                .collect()
-        }
-
-        fn field_count(self: &Arc<Self>) -> usize {
-            self.collections.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_enumerator(|this| Box::new({
+                this.index.keys().map(|k| Value::from(k.clone()))
+            }))
         }
     }
 
-    impl MapObject for Collection {
-        fn get_field(self: &Arc<Self>, name: &Value) -> Option<Value> {
-            let value = match name.as_str()? {
-                "index" => Value::from_any_map_object(self.index.clone()?),
-                "items" => Value::from_any_seq_object(self.clone()),
-                "data" => Value::from_any_map_object(CollectionData::new(self.clone())),
+    impl Object for Collection {
+        fn get_value(self: &Arc<Self>, name: &Value) -> Option<Value> {
+            Some(match name.as_str()? {
+                "index" => Value::from_dyn_object(self.index.clone()?),
+                "items" => Value::from_dyn_object(CollectionItems::new(self.clone())),
+                "data" => Value::from_dyn_object(CollectionData::new(self.clone())),
                 _ => return None,
-            };
-
-            Some(value)
+            })
         }
 
-        fn static_fields(&self) -> Option<&'static [&'static str]> {
-            Some(&["index", "items", "data"])
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Str(&["index", "items", "data"])
         }
     }
 
-    impl SeqObject for Collection {
-        fn get_item(self: &Arc<Self>, idx: usize) -> Option<Value> {
-            Some(Value::from_any_map_object(self.items.get(idx)?.clone()))
+    impl Object for CollectionItems {
+        fn get_value(self: &Arc<Self>, value: &Value) -> Option<Value> {
+            let item = self.items.get(value.as_usize()?)?;
+            Some(Value::from_dyn_object(item.clone()))
         }
 
-        fn item_count(self: &Arc<Self>) -> usize {
-            self.items.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Seq(List::len(&self.items))
         }
     }
 
     impl Metadata {
-        fn get_field(&self, name: &Value) -> Option<Value> {
+        fn get_value(&self, name: &Value) -> Option<Value> {
             self.get_raw(name.as_str()?).map(Value::from)
         }
 
-        fn fields(&self) -> Vec<Value> {
-            self.keys()
-                .map(Value::from)
-                .collect()
+        fn fields(&self) -> impl Iterator<Item = Value> + '_ {
+            self.keys().map(Value::from)
         }
     }
 
-    impl MapObject for Metadata {
-        #[inline]
-        fn get_field(self: &Arc<Self>, name: &Value) -> Option<Value> {
-            Metadata::get_field(self, name)
+    impl Object for Metadata {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
         }
 
-        #[inline(always)]
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            Metadata::fields(self)
+        fn get_value(self: &Arc<Self>, name: &Value) -> Option<Value> {
+            Metadata::get_value(self, name)
         }
 
-        fn field_count(self: &Arc<Self>) -> usize {
-            self.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_enumerator(|this| Box::new(this.fields()))
         }
     }
 
-    impl MapObject for Item {
-        fn get_field(self: &Arc<Self>, name: &Value) -> Option<Value> {
-            match name.as_str() {
-                Some("id") => Some(self.id.0.into()),
-                _ => self.metadata.get_field(name)
-            }
+    impl Object for Item {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
         }
 
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            // FIXME: What if `id` already in `self.metadata`?
-            let mut fields = self.metadata.fields();
-            fields.push("id".into());
-            fields
+        fn get_value(self: &Arc<Self>, name: &Value) -> Option<Value> {
+            self.metadata.get_value(name)
         }
 
-        fn field_count(self: &Arc<Self>) -> usize {
-            // FIXME: What if `id` already in `self.metadata`?
-            self.metadata.len() + 1
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_enumerator(|this| Box::new(this.metadata.fields()))
         }
     }
 
-    impl MapObject for CollectionData {
-        fn get_field(self: &Arc<Self>, key: &Value) -> Option<Value> {
+    impl Object for CollectionData {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Map
+        }
+
+        fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             let name = key.as_str()?;
             let id = self.data.keys()
-                .find(|id| self.tree[**id].file_stem() == name)?;
+                .find(|id| self.entry.tree[**id].file_stem() == name)?;
 
             let list = self.data.get(id)?.clone();
-            Some(Value::from_any_seq_object(list))
+            Some(Value::from_dyn_object(list))
         }
 
-        fn fields(self: &Arc<Self>) -> Vec<Value> {
-            self.data.keys()
-                .map(|id| self.tree[*id].file_stem())
-                .map(intern)
-                .map(Value::from)
-                .collect()
-        }
-
-        fn field_count(self: &Arc<Self>) -> usize {
-            self.data.len()
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            self.mapped_enumerator(|this| Box::new({
+                this.data.keys()
+                    .map(|id| this.entry.tree[*id].file_stem())
+                    .map(Value::from)
+            }))
         }
     }
-
 }
 
 impl_error_detail_with_std_error!(minijinja::Error);

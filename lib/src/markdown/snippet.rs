@@ -103,17 +103,17 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for SnippetIterator<'a, I> {
 // IDEA: What if we just take the first k character of the text and render that as markdown?
 
 impl<O: Sink> Plugin for Snippet<O> {
-    fn remap<'a, I>(&'a mut self, events: I) -> Box<dyn Iterator<Item = Event<'a>> + 'a>
+    fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Box::new(SnippetIterator {
+        SnippetIterator {
             snippet: &mut self.snippet,
             snip_text_len: 0,
             inner: events,
             capture: vec![],
             min_length: self.length,
             done: self.length == 0,
-        })
+        }
     }
 
     fn finalize(&mut self) -> Result<()> {
