@@ -31,10 +31,6 @@ dashmap = { version = "5.4", features = ["rayon", "inline"] } # is there a bette
 rustc-hash = { version = "1.1" }
 boxcar = "0.2.4"
 
-[dependencies.svgbobdoc]
-version = "0.3"
-features = ["enable"]
-
 [dependencies.mlua]
 version = "0.9.5"
 features = ["send", "luau", "serialize"]

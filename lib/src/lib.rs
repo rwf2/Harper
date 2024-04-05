@@ -1,4 +1,3 @@
-#![doc = svgbobdoc::transform!(
 //! A toolkit for creating blazing fast static site generators.
 //!
 //! # Overview
@@ -10,7 +9,7 @@
 //!
 //! Internally, harper organizes content in a semi-hierarchy as follows:
 //!
-//! ```svgbob
+//! ```text
 //!                            +-------+
 //!                            | Site  |
 //!                            +---+---+
@@ -66,7 +65,6 @@
 //!      templating context.
 //! 3. Assets are transformed according to the SSG's liking.
 //! 4. Fully transformed content is written to an output directory.
-)]
 
 #[macro_use]
 pub mod error;
