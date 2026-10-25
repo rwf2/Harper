@@ -2,6 +2,7 @@ mod variation;
 mod macros;
 mod path_ext;
 mod lazy_result;
+mod duoindexmap;
 
 pub mod hlist;
 
@@ -9,6 +10,7 @@ pub use path_ext::*;
 pub use macros::*;
 pub use lazy_result::*;
 pub use variation::*;
+pub use duoindexmap::*;
 
 use std::path::{Path, PathBuf, Component};
 

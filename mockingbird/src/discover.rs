@@ -80,10 +80,13 @@ impl Mockingbird {
         for index in index_files {
             let group_dir = &self.tree[index.parent.unwrap()];
             let collection = site.get_or_insert_collection(|| {
-                group_dir.path_relative_to(content_root)
+                let rel = group_dir.path_relative_to(content_root)
                     .unwrap()
-                    .to_string_lossy()
-                    .into()
+                    .to_string_lossy();
+
+                rel.is_empty()
+                    .then_some("@".into())
+                    .unwrap_or_else(|| rel.into())
             }, group_dir.id);
 
             if let Some(ref existing) = collection.index {
@@ -104,7 +107,7 @@ impl Mockingbird {
     fn parent<'a>(&self, site: &'a mut Site, mut entry: EntryId) -> Option<&'a mut Collection> {
         loop {
             let parent = self.tree[entry].parent?;
-            if site.collections.contains_key(&parent) {
+            if site.collections.contains_pkey(&parent) {
                 let c = site.collections.get_mut(&parent)?;
                 return Some(Arc::get_mut(c).expect("&mut -> &mut"));
             }
@@ -128,7 +131,7 @@ impl Mockingbird {
             if entry.depth - collection.entry.depth <= 1 {
                 collection.new_item(entry.id);
             } else {
-                collection.new_datum(entry.parent.unwrap(), entry.id);
+                collection.new_datum(entry.id);
             };
         }
 

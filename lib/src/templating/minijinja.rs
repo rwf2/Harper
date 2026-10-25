@@ -436,14 +436,13 @@ mod taxonomy_object {
         }
 
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-            let id = self.index.get(key.as_str()?)?;
-            let collection = self.collections.get(id)?.clone();
-            Some(Value::from_dyn_object(collection))
+            let collection = self.collections.get2(key.as_str()?)?;
+            Some(Value::from_dyn_object(collection.clone()))
         }
 
         fn enumerate(self: &Arc<Self>) -> Enumerator {
             self.mapped_enumerator(|this| Box::new({
-                this.index.keys().map(|k| Value::from(k.clone()))
+                this.collections.secondary_keys().map(|k| Value::from(k.clone()))
             }))
         }
     }
@@ -518,19 +517,13 @@ mod taxonomy_object {
         }
 
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-            let name = key.as_str()?;
-            let id = self.data.keys()
-                .find(|id| self.entry.tree[**id].file_stem() == name)?;
-
-            let list = self.data.get(id)?.clone();
-            Some(Value::from_dyn_object(list))
+            let list = self.data.get2(key.as_str()?)?;
+            Some(Value::from_dyn_object(list.clone()))
         }
 
         fn enumerate(self: &Arc<Self>) -> Enumerator {
             self.mapped_enumerator(|this| Box::new({
-                this.data.keys()
-                    .map(|id| this.entry.tree[*id].file_stem())
-                    .map(Value::from)
+                this.data.secondary_keys().map(|s| Value::from(s.clone()))
             }))
         }
     }

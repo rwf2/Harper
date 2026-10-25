@@ -18,8 +18,7 @@ pub enum Value {
     Bool(bool),
     Num(Num),
     String(Arc<str>),
-    #[serde(serialize_with = "PathStr::serialize")]
-    #[serde(deserialize_with = "PathStr::deserialize")]
+    #[serde(with = "PathStr")]
     Path(Arc<PathStr>),
     Array(Arc<Vec<Value>>),
     Dict(Arc<Dict>),

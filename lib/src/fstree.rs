@@ -233,6 +233,10 @@ impl OwnedEntry {
     pub fn entry(&self) -> &Entry {
         &self.tree[self.id]
     }
+
+    pub fn parent(&self) -> Option<&Entry> {
+        self.parent.map(|id| &self.tree[id])
+    }
 }
 
 impl Deref for OwnedEntry {

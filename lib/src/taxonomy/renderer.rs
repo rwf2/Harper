@@ -11,7 +11,7 @@ pub fn render_site<R>(renderer: &R, site: &Arc<Site>) -> Result<R::Output>
 {
     let (collected, process_result): (Result<R::Output>, _) = rayon::join(
         || site.collections.par_iter()
-            .map(|(_, collection)| renderer.render_collection(site, collection))
+            .map(|collection| renderer.render_collection(site, collection))
             .collect(),
         || site.items.par_iter().try_for_each(|asset| renderer.render_site_item(asset))
     );
@@ -33,8 +33,8 @@ pub fn render_collection<R>(
 {
     rayon::join(
         || collection.items.sort_by(|a, b| a.entry.path.cmp(&b.entry.path)),
-        || collection.data.par_iter().for_each(|(_, l)| {
-            l.sort_by(|a, b| a.entry.path.cmp(&b.entry.path))
+        || collection.data.par_iter().for_each(|items| {
+            items.sort_by(|a, b| a.entry.path.cmp(&b.entry.path))
         }),
     );
 

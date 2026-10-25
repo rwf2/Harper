@@ -23,7 +23,7 @@ impl Renderer for Mockingbird {
     fn render_site(&self, site: &Arc<Site>) -> Result<Self::Output> {
         render_site(self, site)?;
 
-        site.collections.par_iter().map(|(_, collection)| collection.par_map_items(|_, item| {
+        site.collections.par_iter().map(|collection| collection.par_map_items(|_, item| {
             // TODO: Validate template path? TODO: Validate permapath?
             let Some(Ok(permapath)) = item.metadata.get(PermaPath) else {
                 return Ok(());
@@ -131,7 +131,7 @@ impl Renderer for Mockingbird {
 
                 (dir.join("index.html").into(), url)
             }
-            (Kind::Datum(_), true) => return Ok(()),
+            (Kind::Data, true) => return Ok(()),
             (_, false) => {
                 let path = item.entry
                     .path_relative_to(content_root)
@@ -148,7 +148,7 @@ impl Renderer for Mockingbird {
         let template_name = match kind {
             Kind::Index => "index.html",
             Kind::Item(_) => "page.html",
-            Kind::Datum(_) => "data.html",
+            Kind::Data => "data.html",
         };
 
         let template = self.template_root.and_then(|subtree| {

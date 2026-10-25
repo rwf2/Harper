@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
 
 use crate::fstree::{Entry, EntryId, FsTree, OwnedEntry};
+use crate::util::DuoIndexMap;
 use crate::value::List;
 use crate::taxonomy::*;
 
@@ -13,7 +13,7 @@ pub struct Collection {
     pub name: Arc<str>,
     pub index: Option<Arc<Item>>,
     pub items: Arc<List<Arc<Item>>>,
-    pub data: FxHashMap<EntryId, Arc<List<Arc<Item>>>>,
+    pub data: DuoIndexMap<EntryId, Arc<str>, Arc<List<Arc<Item>>>>,
 }
 
 // TODO: Add metadata to collection? Use it for all of its items?
@@ -23,7 +23,7 @@ pub enum Kind {
     /// An item that's the index.
     Index,
     /// This is the the entryid of the directory (self.data[entry]) it's in.
-    Datum(EntryId),
+    Data,
     /// The sequence of the item.
     Item(usize),
 }
@@ -49,9 +49,15 @@ impl Collection {
         item
     }
 
-    pub fn new_datum(&mut self, parent: EntryId, entry: EntryId) -> Arc<Item> {
+    pub fn new_datum(&mut self, entry: EntryId) -> Arc<Item> {
         let datum = Arc::new(Item::new(self.entry.tree.clone(), entry));
-        self.data.entry(parent).or_default().push(datum.clone());
+        let entry = &self.entry.tree[entry];
+        let parent = &self.entry.tree[entry.parent.unwrap()];
+        self.data
+            .get_or_insert_default(parent.id, || parent.file_name.as_str().into())
+            .expect("unique name/entry combo")
+            .push(datum.clone());
+
         datum
     }
 
@@ -67,7 +73,7 @@ impl Collection {
               C: FromParallelIterator<R>
     {
         let data_content = self.data.par_iter()
-            .flat_map(|(&id, items)| items.par_iter().map(move |item| (Kind::Datum(id), item)));
+            .flat_map(|items| items.par_iter().map(move |item| (Kind::Data, item)));
 
         let index_content = self.index.as_ref()
             .into_par_iter()

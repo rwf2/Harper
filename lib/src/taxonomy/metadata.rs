@@ -7,7 +7,7 @@ use crate::value::{Source, Sink};
 use crate::error::Result;
 use crate::value::Value;
 
-type Hasher = std::hash::BuildHasherDefault<rustc_hash::FxHasher>;
+type FxHasher = std::hash::BuildHasherDefault<rustc_hash::FxHasher>;
 
 pub trait MetaKey: 'static {
     const KEY: &'static str;
@@ -38,7 +38,7 @@ pub struct Key<'m, 'k, V> {
 
 #[derive(Debug, Clone, Default)]
 pub struct Metadata {
-    pub(crate) map: Arc<dashmap::DashMap<Arc<str>, Value, Hasher>>,
+    pub(crate) map: Arc<dashmap::DashMap<Arc<str>, Value, FxHasher>>,
 }
 
 impl Metadata {
