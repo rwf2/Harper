@@ -108,6 +108,9 @@ impl UrlBuf {
         self
     }
 
+    /// Removes this URL's scheme, authority, and leading slashes.
+    /// See [`Url::relative_part()`] for the borrowed operation.
+    ///
     /// ```rust
     /// use harper::url::UrlBuf;
     ///
@@ -115,7 +118,7 @@ impl UrlBuf {
     /// url.make_relative();
     /// assert_eq!(url.as_str(), "foo");
     ///
-    /// let mut url = UrlBuf::from("https://rocket.rs/foo");
+    /// let mut url = UrlBuf::from("/foo");
     /// url.make_relative();
     /// assert_eq!(url.as_str(), "foo");
     /// ```

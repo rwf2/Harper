@@ -150,7 +150,7 @@ pub struct ParIter<'a, T> {
     slice: Slice<'a, T>,
 }
 
-impl<'a, T: Sync> ParallelIterator for ParIter<'a, T> {
+impl<'a, T: Send + Sync> ParallelIterator for ParIter<'a, T> {
     type Item = &'a T;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
@@ -160,7 +160,7 @@ impl<'a, T: Sync> ParallelIterator for ParIter<'a, T> {
     }
 }
 
-impl<T: Sync> IndexedParallelIterator for ParIter<'_, T> {
+impl<T: Send + Sync> IndexedParallelIterator for ParIter<'_, T> {
     fn len(&self) -> usize {
         self.slice.len()
     }
@@ -178,7 +178,7 @@ struct IterProducer<'a, T> {
     slice: Slice<'a, T>,
 }
 
-impl<'a, T: Sync> Producer for IterProducer<'a, T> {
+impl<'a, T: Send + Sync> Producer for IterProducer<'a, T> {
     type Item = &'a T;
 
     type IntoIter = SliceIter<'a, T>;

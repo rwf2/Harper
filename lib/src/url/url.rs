@@ -52,10 +52,17 @@ impl Url {
         UrlBuf::from(self.0.to_owned())
     }
 
+    /// Returns this URL without its scheme, authority, or leading slashes.
+    /// The query and fragment, if any, are preserved.
     pub fn relative_part(&self) -> &Url {
         let mut url = self.as_str();
         if let Some(scheme) = self.scheme() {
             url = &url[scheme.len() + 1..];
+        }
+
+        if let Some(rest) = url.strip_prefix("//") {
+            let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+            url = &rest[end..];
         }
 
         url = url.trim_start_matches('/');
@@ -167,5 +174,34 @@ impl ToOwned for Url {
 
     fn to_owned(&self) -> Self::Owned {
         self.to_url_buf()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Url;
+
+    #[test]
+    fn relative_part() {
+        let cases = [
+            ("", ""),
+            ("foo/bar", "foo/bar"),
+            ("/foo/bar", "foo/bar"),
+            ("https://rocket.rs/foo?x=1#top", "foo?x=1#top"),
+            ("//rocket.rs/foo", "foo"),
+            ("https://rocket.rs", ""),
+            ("//rocket.rs/", ""),
+            ("https://rocket.rs?next=/foo#top", "?next=/foo#top"),
+            ("//rocket.rs#foo/bar", "#foo/bar"),
+            ("https://user:pass@[::1]:443/foo", "foo"),
+            ("foo?url=https://rocket.rs/", "foo?url=https://rocket.rs/"),
+            ("#https://rocket.rs/foo", "#https://rocket.rs/foo"),
+            ("ftp:/foo", "foo"),
+            ("mailto:foo@bar.com", "foo@bar.com"),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(Url::new(input).relative_part().as_str(), expected, "{input}");
+        }
     }
 }
