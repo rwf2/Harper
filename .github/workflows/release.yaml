@@ -1,64 +1,63 @@
 name: Release
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
     tags:
       - v[0-9]+.*
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 defaults:
   run:
     shell: bash
 
 jobs:
-  create-release:
-    name: "GitHub Release"
-    if: github.repository_owner == 'rwf2'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: taiki-e/create-gh-release-action@v1
-        with:
-          title: Mockingbird $tag
-          branch: master
-          token: ${{ secrets.GITHUB_TOKEN }}
+  test:
+    uses: ./.github/workflows/ci.yaml
 
-  upload-assets:
+  build:
     name: "Upload ${{ matrix.target }} Binaries"
-    timeout-minutes: 60
     if: github.repository_owner == 'rwf2'
-    needs:
-      - create-release
+    needs: test
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os || 'ubuntu-22.04' }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: aarch64-unknown-linux-gnu
           - target: aarch64-unknown-linux-musl
           - target: aarch64-apple-darwin
-            os: macos-11
+            os: macos-15
           - target: aarch64-pc-windows-msvc
-            os: windows-2019
+            os: windows-2025
           - target: x86_64-unknown-linux-gnu
           - target: x86_64-unknown-linux-musl
           - target: x86_64-apple-darwin
-            os: macos-11
+            os: macos-15-intel
           - target: x86_64-pc-windows-msvc
-            os: windows-2019
+            os: windows-2025
           - target: x86_64-unknown-freebsd
           - target: universal-apple-darwin
-            os: macos-11
-    runs-on: ${{ matrix.os || 'ubuntu-20.04' }}
+            os: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Configure Cross Compiler
         uses: taiki-e/setup-cross-toolchain-action@v1
+        if: runner.os == 'Linux'
         with:
           target: ${{ matrix.target }}
+          runner: none
       - name: Set RUSTFLAGS
         run: |
           if [[ ${{ matrix.target }} == *-windows-msvc ]]; then
@@ -66,11 +65,60 @@ jobs:
           elif [[ ${{ matrix.target }} == *-linux-musl ]]; then
             echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >> "${GITHUB_ENV}"
           fi
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - name: Build Archives
+        uses: taiki-e/upload-rust-binary-action@v1
+        id: build
         with:
           bin: mockingbird
           target: ${{ matrix.target }}
+          locked: true
+          checksum: sha256
           archive: $bin-$tag-$target
           tar: all
           zip: windows
-          token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: true
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: binaries-${{ matrix.target }}
+          path: ${{ steps.build.outputs.archive }}.*
+          if-no-files-found: error
+
+  release:
+    name: "GitHub Release"
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check Release Branch
+        run: git merge-base --is-ancestor HEAD origin/master
+      - name: Download Binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: dist
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        id: release
+        with:
+          name: Mockingbird ${{ github.ref_name }}
+          artifacts: dist/*
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          draft: true
+          allowUpdates: true
+          updateOnlyUnreleased: true
+          skipIfReleaseExists: true
+      - name: Publish
+        if: steps.release.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

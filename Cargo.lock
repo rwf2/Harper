@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "harper"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "boxcar",
  "chrono",
@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "mockingbird"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "harper",
  "rustc-hash",
