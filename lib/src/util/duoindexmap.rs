@@ -54,22 +54,10 @@ impl<PK, SK, V, S> DuoIndexMap<PK, SK, V, S>
         self.get_or_insert_with(pk, sk, |_, _| V::default())
     }
 
-    pub fn get_mut<Q>(&mut self, pk: &Q) -> Option<&mut V>
-        where PK: Borrow<Q>, Q: Hash + Eq + ?Sized
-    {
-        self.primary.get(pk).map(|&i| &mut self.values[i])
-    }
-
     pub fn get2<Q>(&self, sk: &Q) -> Option<&V>
         where SK: Borrow<Q>, Q: Hash + Eq + ?Sized
     {
         self.secondary.get(sk).map(|&i| &self.values[i])
-    }
-
-    pub fn contains_pkey<Q>(&self, pk: &Q) -> bool
-        where PK: Borrow<Q>, Q: Hash + Eq + ?Sized
-    {
-        self.primary.contains_key(pk)
     }
 }
 

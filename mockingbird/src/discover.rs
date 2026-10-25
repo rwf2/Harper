@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 
-use harper::{err, Collection, Site};
+use harper::{err, Site};
 use harper::fstree::{Entry, EntryId, FsTree};
 use harper::templating::EngineInit;
 use harper::error::Result;
@@ -39,8 +39,7 @@ impl Mockingbird {
     pub fn discover(&self) -> Result<Site> {
         let mut site = Site::new(self.tree.clone());
         self.build_site_items(&mut site);
-        self.build_collections(&mut site)?;
-        self.build_items(&mut site)?;
+        self.build_content(&mut site, &self.tree[self.content_root], None)?;
         Ok(site)
     }
 
@@ -69,34 +68,6 @@ impl Mockingbird {
         });
     }
 
-    fn build_collections(&self, site: &mut Site) -> Result<()> {
-        let content_root = &self.tree[self.content_root];
-        // TODO: Provide a parallel iterator here?
-        let index_files = self.tree.iter_breadth_first(content_root.id)
-            .files()
-            .filter(|e| e.file_stem() == "index");
-
-        // Find all collections, as identified by the presence of an index file.
-        for index in index_files {
-            let group_dir = &self.tree[index.parent.unwrap()];
-            let name = || self.collection_name(group_dir);
-            let collection = site.get_or_insert_collection(name, group_dir.id)?;
-
-            if let Some(ref existing) = collection.index {
-                return err!(
-                    "found multiple index files for a single collection",
-                    "faulting collection", group_dir.path.display(),
-                    "first index" => existing.entry.path.display(),
-                    "second index" => index.path.display(),
-                );
-            }
-
-            collection.set_index_item(index.id);
-        }
-
-        Ok(())
-    }
-
     /// The name of the collection rooted at `dir`: its path relative to the
     /// content root, or `/` for the content root itself. Unique per `dir`.
     fn collection_name(&self, dir: &Entry) -> Arc<str> {
@@ -107,42 +78,54 @@ impl Mockingbird {
         }
     }
 
-    fn parent<'a>(&self, site: &'a mut Site, mut entry: EntryId) -> Option<&'a mut Collection> {
-        loop {
-            let parent = self.tree[entry].parent?;
-            if site.collections.contains_pkey(&parent) {
-                let c = site.collections.get_mut(&parent)?;
-                return Some(Arc::get_mut(c).expect("&mut -> &mut"));
-            }
+    /// Adds the content in `dir` and its subdirectories to `site`. A directory
+    /// with an index file roots a collection. `collection` is the root of the
+    /// closest collection containing `dir`, if any.
+    fn build_content(
+        &self,
+        site: &mut Site,
+        dir: &Entry,
+        collection: Option<EntryId>,
+    ) -> Result<()> {
+        let children = || dir.children.iter().map(|&id| &self.tree[id]);
+        let is_index = |e: &Entry| e.metadata.is_file() && e.file_stem() == "index";
 
-            entry = parent;
-        }
-    }
-
-    fn build_items(&self, site: &mut Site) -> Result<()> {
-        let tree = self.tree.clone();
-        let content_root = &tree[self.content_root];
-        let files = tree.iter_breadth_first(content_root.id).files()
-            .filter(|e| e.file_stem() != "index");
-
-        for entry in files {
-            let collection = match self.parent(site, entry.id) {
-                Some(collection) => collection,
-                None => {
-                    let name = || self.collection_name(content_root);
-                    site.get_or_insert_collection(name, content_root.id)?
+        let mut index_files = children().filter(|e| is_index(e));
+        let collection = match index_files.next() {
+            Some(index) => {
+                if let Some(second) = index_files.next() {
+                    return err!(
+                        "found multiple index files for a single collection",
+                        "faulting collection", dir.path.display(),
+                        "first index" => index.path.display(),
+                        "second index" => second.path.display(),
+                    );
                 }
-            };
 
-            if entry.depth - collection.entry.depth <= 1 {
-                collection.new_item(entry.id);
+                let name = || self.collection_name(dir);
+                site.get_or_insert_collection(name, dir.id)?.set_index_item(index.id);
+                Some(dir.id)
+            }
+            None => collection,
+        };
+
+        let mut files = children().filter(|e| e.metadata.is_file() && !is_index(e)).peekable();
+        if files.peek().is_some() {
+            let root = &self.tree[collection.unwrap_or(self.content_root)];
+            let collection = site.get_or_insert_collection(|| self.collection_name(root), root.id)?;
+            if root.id == dir.id {
+                files.for_each(|e| { collection.new_item(e.id); });
             } else {
-                collection.new_datum(entry.id)?;
-            };
+                collection.new_data(dir.id, files.map(|e| e.id))?;
+            }
+        }
+
+        for child in children().filter(|e| e.metadata.is_dir()) {
+            self.build_content(site, child, collection)?;
         }
 
         Ok(())
-	}
+    }
 }
 
 #[cfg(test)]

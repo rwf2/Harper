@@ -50,30 +50,34 @@ impl Collection {
         item
     }
 
-    /// Fails if the name of `entry`'s directory is already the name of another
-    /// data directory in this collection.
-    pub fn new_datum(&mut self, entry: EntryId) -> Result<Arc<Item>> {
+    /// Adds `entries`, files in the data directory `dir`, as data. Fails if
+    /// `dir`'s name is already the name of another data directory.
+    pub fn new_data<I>(&mut self, dir: EntryId, entries: I) -> Result<()>
+        where I: IntoIterator<Item = EntryId>
+    {
         let tree = &self.entry.tree;
-        let parent = &tree[tree[entry].parent.unwrap()];
-        let name = || parent.path_relative_to(&self.entry)
+        let dir = &tree[dir];
+        let name = || dir.path_relative_to(&self.entry)
             .unwrap()
             .to_string_lossy()
             .into();
 
-        match self.data.get_or_insert_default(parent.id, name) {
-            Ok(data) => {
-                let datum = Arc::new(Item::new(tree.clone(), entry));
-                data.push(datum.clone());
-                Ok(datum)
-            }
-            Err(name) => err! {
+        let data = match self.data.get_or_insert_default(dir.id, name) {
+            Ok(data) => data,
+            Err(name) => return err! {
                 "multiple data directories in a collection have the same name",
                 "collection" => self.name,
                 "name" => name,
-                "directory" => format!("{:?}", parent.path),
+                "directory" => format!("{:?}", dir.path),
                 "note: non-UTF-8 path components are converted lossily",
             }
+        };
+
+        for entry in entries {
+            data.push(Arc::new(Item::new(tree.clone(), entry)));
         }
+
+        Ok(())
     }
 
     pub fn set_index_item(&mut self, entry: EntryId) -> Arc<Item> {

@@ -23,9 +23,8 @@ fn test_duo_index_map() {
 
     assert_eq!(map.len(), 2);
     assert_eq!(map.get2("one"), Some(&vec![1, 10]));
+    assert_eq!(map.get2("two"), Some(&vec![2]));
     assert_eq!(map.get2("three"), None);
-    assert_eq!(map.get_mut(&2), Some(&mut vec![2]));
-    assert!(map.contains_pkey(&1) && !map.contains_pkey(&3));
 
     let mut keys: Vec<_> = map.secondary_keys().copied().collect();
     keys.sort();
@@ -44,6 +43,8 @@ fn test_duo_index_map_duplicate_secondary_key() {
     assert_eq!(map.get_or_insert_default(2, || "one"), Err("one"));
 
     assert_eq!(map.len(), 1);
-    assert!(!map.contains_pkey(&2));
     assert_eq!(map.get2("one"), Some(&vec![1]));
+
+    // `2` was not inserted, so it's free to take a new key.
+    assert_eq!(map.get_or_insert_default(2, || "two"), Ok(&mut vec![]));
 }
