@@ -73,7 +73,7 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for SnippetIterator<'a, I> {
                 Tag::Emphasis => open!(self, "<em>"),
                 Tag::Strong => open!(self, "<strong>"),
                 Tag::Strikethrough => open!(self, "<strike>"),
-                Tag::BlockQuote => open!(self, "<blockquote>"),
+                Tag::BlockQuote(_) => open!(self, "<blockquote>"),
                 Tag::Link { dest_url, title, .. } => {
                     open!(self, r#"<a href="{dest_url}" title="{title}">"#)
                 }
@@ -84,7 +84,7 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for SnippetIterator<'a, I> {
                 TagEnd::Emphasis => close!(self, "</em>"),
                 TagEnd::Strong => close!(self, "</strong>"),
                 TagEnd::Strikethrough => close!(self, "</strike>"),
-                TagEnd::BlockQuote => close!(self, "</blockquote>"),
+                TagEnd::BlockQuote(_) => close!(self, "</blockquote>"),
                 TagEnd::Link => close!(self, "</a>"),
                 _ => close!(self),
             },

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use pulldown_cmark::{Parser, Options};
 
-use crate::error;
 use crate::util::hlist::{HList, for_each_mut};
 use crate::markdown::Plugin;
 use crate::util::hlist::*;
@@ -21,7 +20,13 @@ impl<I: Source> Markdown<I, Nil> {
     pub fn from(input: I) -> Self {
         Self {
             input,
-            options: Options::all().difference(Options::ENABLE_SMART_PUNCTUATION),
+            options: Options::ENABLE_TABLES
+                | Options::ENABLE_OLD_FOOTNOTES
+                | Options::ENABLE_STRIKETHROUGH
+                | Options::ENABLE_TASKLISTS
+                | Options::ENABLE_HEADING_ATTRIBUTES
+                | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+                | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS,
             plugins: Nil,
         }
     }
@@ -96,3 +101,6 @@ macro_rules! impl_generic {
 }
 
 impl_generic!([A B C D E F G H I J K L M N O P Q R S T U V W X Y Z]);
+
+#[cfg(test)]
+mod tests;

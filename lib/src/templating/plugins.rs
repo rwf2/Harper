@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use either::Either;
 use mlua::{Lua, Value, Function, Table, LuaSerdeExt, MultiValue};
-use minijinja::value::Value as TemplateValue;
+use minijinja::value::{Serde, Value as TemplateValue};
 use thread_local::ThreadLocal;
 
 use crate::fstree::FsTree;
@@ -93,7 +93,7 @@ impl PluginContext {
             .collect::<mlua::Result<Vec<Value>>>()?;
 
         let raw: Value = callback.call(MultiValue::from_vec(values))?;
-        let value = TemplateValue::from_serializable(&raw);
+        let value = TemplateValue::from(Serde(&raw));
         let value = value.try_into()?;
         Ok(value)
     }

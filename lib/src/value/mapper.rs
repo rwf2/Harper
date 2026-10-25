@@ -65,10 +65,12 @@ impl_format!(Toml: toml::from_str, toml::de::Error);
 impl_format!(Json: serde_json::from_str, serde_json::error::Error);
 
 #[derive(Debug, Default)]
+#[cfg(feature = "sass")]
 pub struct Grass {
     options: grass::Options<'static>,
 }
 
+#[cfg(feature = "sass")]
 impl Mapper for Grass {
     type Output = String;
 

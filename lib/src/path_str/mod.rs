@@ -71,12 +71,5 @@ impl fmt::Display for PathStr {
     }
 }
 
-#[cfg(test)] static_assertions::assert_eq_size!(*const PathStr, *const Path);
-#[cfg(test)] static_assertions::assert_eq_align!(*const PathStr, *const Path);
-#[cfg(test)] static_assertions::assert_eq_size!(&PathStr, &Path);
-#[cfg(test)] static_assertions::assert_eq_align!(&PathStr, &Path);
-#[cfg(test)] static_assertions::assert_eq_size!(*const PathStr, *const OsStr);
-#[cfg(test)] static_assertions::assert_eq_align!(*const PathStr, *const OsStr);
-#[cfg(test)] static_assertions::assert_eq_size!(&PathStr, &OsStr);
-#[cfg(test)] static_assertions::assert_eq_align!(&PathStr, &OsStr);
-#[cfg(test)] static_assertions::assert_impl_all!(str: AsRef<Path>, AsRef<OsStr>);
+#[cfg(test)]
+mod tests;

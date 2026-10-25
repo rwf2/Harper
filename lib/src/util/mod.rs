@@ -20,6 +20,11 @@ pub fn slugify(string: &str) -> String {
 
     let mut need_dash = false;
     for ch in string.chars() {
+        if ch.is_whitespace() {
+            need_dash = !output.is_empty();
+            continue;
+        }
+
         for b in deunicode::deunicode_char(ch).unwrap_or("-").bytes() {
             match b {
                 b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => {
@@ -130,16 +135,4 @@ pub fn is_template(input: &str) -> bool {
 }
 
 #[cfg(test)]
-mod slug_tests {
-    #[test]
-    fn test_slugify() {
-        use crate::util::slugify;
-
-        assert_eq!(slugify("My Test String!!!1!1"), "my-test-string-1-1");
-        assert_eq!(slugify("test\nit   now!"), "test-it-now");
-        assert_eq!(slugify("  --test_-_cool- -  "), "test_-_cool");
-        assert_eq!(slugify("Æúű--cool?"), "aeuu-cool");
-        assert_eq!(slugify("You & Me"), "you-me");
-        assert_eq!(slugify("  user@-- example.com  "), "user-example-com");
-    }
-}
+mod tests;

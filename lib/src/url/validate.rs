@@ -80,17 +80,4 @@ const URL_CHARS: [u8; 256] = char_table(&[
 pub const fn is_url_char(&c: &u8) -> bool { URL_CHARS[c as usize] != 0 }
 
 #[cfg(test)]
-mod tests {
-    fn test_char_table(table: &[u8]) {
-        for (i, &v) in table.iter().enumerate() {
-            if v != 0 {
-                assert_eq!(i, v as usize);
-            }
-        }
-    }
-
-    #[test]
-    fn check_tables() {
-        test_char_table(&super::URL_CHARS[..]);
-    }
-}
+mod tests;

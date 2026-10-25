@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use minijinja::{Environment, path_loader};
-use minijinja::value::Value;
+use minijinja::value::{Serde, Value};
 use serde::Serialize;
 
 use crate::taxonomy::{Site, Item, Collection, Metadata};
@@ -39,7 +39,8 @@ fn try_init<G: Serialize>(
     globals: G,
 ) -> Result<Environment<'static>> {
     let mut env = Environment::new();
-    env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+    // Optional values may be tested for truth, but must exist when consumed.
+    env.set_undefined_behavior(minijinja::UndefinedBehavior::SemiStrict);
 
     if let Some(root) = root {
         env.set_loader(path_loader(&tree[root].path));
@@ -83,7 +84,7 @@ fn try_init<G: Serialize>(
         }
     }
 
-    env.add_global("G", Value::from_serializable(&globals));
+    env.add_global("G", Value::from(Serde(&globals)));
     env.add_function("join", ext::join);
     env.add_function("now", ext::now);
     env.add_filter("deslug", ext::deslug);
@@ -165,7 +166,7 @@ mod ext {
     use std::sync::Arc;
 
     use chrono::{NaiveDate, NaiveTime, DateTime, Utc};
-    use minijinja::{value::{intern, DynObject, Rest, Value}, Error, ErrorKind, State};
+    use minijinja::{value::{DynObject, Rest, Value}, Error, ErrorKind, State};
 
     use crate::url::Url;
 
@@ -265,7 +266,7 @@ mod ext {
     pub fn split(value: &str, pat: &str, n: Option<usize>) -> Result<Value, Error> {
         match n {
             Some(n) => Ok(value.split(pat).nth(n).map(Value::from).unwrap_or(Value::UNDEFINED)),
-            None => Ok(value.split(pat).map(intern).collect()),
+            None => Ok(value.split(pat).map(Value::from).collect()),
         }
     }
 
@@ -536,3 +537,6 @@ mod taxonomy_object {
 }
 
 impl_error_detail_with_std_error!(minijinja::Error);
+
+#[cfg(test)]
+mod tests;
