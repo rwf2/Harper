@@ -12,7 +12,6 @@ mod markdown;
 mod parts;
 mod snippet;
 // mod indexer;
-// mod ts_highlight;
 
 pub use plugin::Plugin;
 pub use markdown::Markdown;
@@ -27,5 +26,4 @@ pub use render::Renderer;
 pub use parts::Parts;
 pub use snippet::Snippet;
 pub use templatize::Templatize;
-// pub use ts_highlight::SyntaxHighlight as TsHighligher;
 // pub use indexer::{LunrIndexer, LunrIndex, LunrDocument};

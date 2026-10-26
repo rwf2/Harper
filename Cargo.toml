@@ -12,3 +12,9 @@ lto = true
 opt-level = 3
 # strip = true
 debug = 2
+
+# Query (de)serialization, which `jellybean` needs, isn't upstream yet.
+[patch.crates-io]
+tree-sitter = { git = "file:///Users/sbenitez/Sync/Code/tree-sitter", branch = "query-dump" }
+tree-sitter-highlight = { git = "file:///Users/sbenitez/Sync/Code/tree-sitter", branch = "query-dump" }
+tree-sitter-language = { git = "file:///Users/sbenitez/Sync/Code/tree-sitter", branch = "query-dump" }

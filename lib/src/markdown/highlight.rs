@@ -1,32 +1,29 @@
 use pulldown_cmark::{Event, Tag, CodeBlockKind, TagEnd};
-use syntect::html::{ClassedHTMLGenerator, ClassStyle};
-use syntect::parsing::{SyntaxSet, SyntaxReference};
-use once_cell::sync::Lazy;
+use pulldown_cmark_escape::{escape_html, escape_html_body_text};
+use jellybean::{Language, Highlight, ALL_LANGUAGES};
 
 use super::Plugin;
-
-static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(||
-    syntect::dumps::from_uncompressed_data(include_bytes!(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/assets/syntax-set-newlines-uncompressed.packdump")
-    )).unwrap());
-
-static DEFAULT_SYNTAX: Lazy<&'static SyntaxReference>
-    = Lazy::new(|| SYNTAX_SET.find_syntax_plain_text());
 
 #[derive(Default, Clone)]
 pub struct SyntaxHighlight;
 
 pub struct Highlighter<I> {
-    generator: Option<ClassedHTMLGenerator<'static>>,
-    lines: usize,
+    block: Option<CodeBlock>,
     inner: I,
 }
 
+struct CodeBlock {
+    language: Option<&'static Language>,
+    code: String,
+}
+
 impl SyntaxHighlight {
+    /// Decodes every language's highlighting configuration in the background.
     #[inline]
     pub fn warm_up() {
-        rayon::spawn(|| { Lazy::force(&SYNTAX_SET); });
-        rayon::spawn(|| { Lazy::force(&DEFAULT_SYNTAX); });
+        for language in ALL_LANGUAGES {
+            rayon::spawn(|| { language.highlighter(); });
+        }
     }
 }
 
@@ -34,32 +31,67 @@ impl Plugin for SyntaxHighlight {
     fn remap<'a, I>(&'a mut self, events: I) -> impl Iterator<Item = Event<'a>> + 'a
         where I: Iterator<Item = Event<'a>> + 'a
     {
-        Highlighter { generator: None, lines: 0, inner: events }
+        Highlighter { block: None, inner: events }
     }
 }
 
-fn html_generator(syntax: &SyntaxReference) -> ClassedHTMLGenerator<'_> {
-    ClassedHTMLGenerator::new_with_class_style(syntax, &*SYNTAX_SET, ClassStyle::Spaced)
-}
+impl CodeBlock {
+    /// Writes `code` as HTML with a `<span>` for every highlight. The span's
+    /// classes are the parts of its capture name: `function.macro` becomes
+    /// `<span class="function macro">`.
+    fn highlight(language: &'static Language, code: &str, html: &mut String) -> bool {
+        let mut highlighter = language.highlighter();
+        for event in highlighter.highlight(code) {
+            match event {
+                Ok(Highlight::Start { group, .. }) => {
+                    html.push_str("<span class=\"");
+                    for (i, part) in group.split('.').enumerate() {
+                        if i > 0 { html.push(' '); }
+                        let _ = escape_html(&mut *html, part);
+                    }
 
-#[allow(unused_must_use)]
-fn code_div(lines: usize, code: String) -> String {
-    use std::fmt::Write;
+                    html.push_str("\">");
+                }
+                Ok(Highlight::Source { text, .. }) => {
+                    let _ = escape_html_body_text(&mut *html, text);
+                }
+                Ok(Highlight::End) => html.push_str("</span>"),
+                Err(_) => return false,
+            }
+        }
 
-    let mut div = String::new();
-    write!(&mut div, "<div class=\"code\" style=\"display: flex;\">");
-
-    write!(&mut div, "<pre class=\"line-nums\">");
-    for i in 1..=lines {
-        if i < lines { write!(&mut div, "{}\n", i); }
-        else { write!(&mut div, "{}", i); }
+        true
     }
-    write!(&mut div, "</pre>");
 
-    write!(&mut div, "<pre class=\"code\">{}</pre>", code);
-    write!(&mut div, "</div>");
+    #[allow(unused_must_use)]
+    fn render(&self) -> String {
+        use std::fmt::Write;
 
-    div
+        let lines = memchr::memchr_iter(b'\n', self.code.as_bytes()).count();
+        let mut div = String::with_capacity(self.code.len() * 3);
+        write!(&mut div, "<div class=\"code\" style=\"display: flex;\">");
+
+        write!(&mut div, "<pre class=\"line-nums\">");
+        for i in 1..=lines {
+            if i < lines { write!(&mut div, "{}\n", i); }
+            else { write!(&mut div, "{}", i); }
+        }
+        write!(&mut div, "</pre>");
+
+        write!(&mut div, "<pre class=\"code\">");
+        let start = div.len();
+        let highlighted = self.language
+            .is_some_and(|language| Self::highlight(language, &self.code, &mut div));
+
+        if !highlighted {
+            div.truncate(start);
+            escape_html_body_text(&mut div, &self.code);
+        }
+
+        write!(&mut div, "</pre>");
+        write!(&mut div, "</div>");
+        div
+    }
 }
 
 impl<'a, I: Iterator<Item = Event<'a>>> Iterator for Highlighter<I> {
@@ -69,28 +101,25 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for Highlighter<I> {
         loop {
             match self.inner.next()? {
                 Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(label))) => {
-                    let lang = label.split_once(',')
+                    let token = label.split_once(',')
                         .map(|(prefix, _)| prefix)
                         .unwrap_or(&*label);
 
-                    let syntax = SYNTAX_SET.find_syntax_by_token(lang)
-                        .unwrap_or_else(|| &*DEFAULT_SYNTAX);
-
-                    self.generator = Some(html_generator(syntax));
-                    self.lines = 0;
+                    let language = Language::find(token.trim());
+                    self.block = Some(CodeBlock { language, code: String::new() });
                 }
-                Event::Text(text) if self.generator.is_some() => {
-                    let generator = self.generator.as_mut().unwrap();
-                    self.lines += memchr::memrchr_iter(b'\n', text.as_bytes()).count();
-                    let _ = generator.parse_html_for_line_which_includes_newline(&text);
+                Event::Text(text) if self.block.is_some() => {
+                    self.block.as_mut().unwrap().code.push_str(&text);
                 }
-                Event::End(TagEnd::CodeBlock) if self.generator.is_some() => {
-                    let generator = self.generator.take().unwrap();
-                    let code_html = code_div(self.lines, generator.finalize());
-                    return Some(Event::Html(code_html.into()));
+                Event::End(TagEnd::CodeBlock) if self.block.is_some() => {
+                    let block = self.block.take().unwrap();
+                    return Some(Event::Html(block.render().into()));
                 },
                 ev => return Some(ev),
             }
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -91,7 +91,6 @@ impl Renderer for Mockingbird {
                     .plugin(CodeTrim::trim(|l, _| l.trim().starts_with("# ") || l.trim() == "#"))
                     .plugin(CodeTrim::trim_start())
                     .plugin(Alias::new(&self.config.settings.aliases))
-                    // .plugin(TsHighligher::default())
                     .plugin(SyntaxHighlight::default())
                     .plugin(Parts::new(item.metadata.key("parts")))
                     .plugin(markdown::Renderer::new(item.metadata.metakey(Content)))
