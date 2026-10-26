@@ -23,7 +23,7 @@ impl Renderer for Mockingbird {
     fn render_site(&self, site: &Arc<Site>) -> Result<Self::Output> {
         render_site(self, site)?;
 
-        site.collections.par_iter().map(|collection| collection.par_map_items(|_, item| {
+        site.collections.par_iter().map(|collection| collection.par_map_items(|kind, item| {
             // TODO: Validate template path? TODO: Validate permapath?
             let Some(Ok(permapath)) = item.metadata.get(PermaPath) else {
                 return Ok(());
@@ -36,7 +36,7 @@ impl Renderer for Mockingbird {
                 Some(Err(e)) => return Err(e.type_err(Template, "invalid template value")),
                 Some(Ok(template)) => {
                     output.write(self.config.engine
-                        .render(template.as_str(), site, Some(collection), item)
+                        .render(template.as_str(), site, Some((collection, kind)), item)
                         .chain_with(|| error! {
                             "failed to render item",
                             "path" => item.entry.relative_path().display(),
@@ -51,7 +51,7 @@ impl Renderer for Mockingbird {
 
                     let name = item.entry.relative_path().to_string_lossy();
                     output.write(self.config.engine
-                        .render_raw(Some(&*name), &content, site, Some(collection), item)
+                        .render_raw(Some(&*name), &content, site, Some((collection, kind)), item)
                         .chain_with(|| error! {
                             "failed to render direct item",
                             "path" => name,

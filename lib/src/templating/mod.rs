@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::error::Result;
 use crate::fstree::{EntryId, FsTree};
-use crate::taxonomy::{Site, Item, Collection, Metadata};
+use crate::taxonomy::{Site, Item, Collection, Kind, Metadata};
 
 pub trait EngineInit {
     type Engine: Engine + 'static;
@@ -22,7 +22,7 @@ pub trait Engine: Send + Sync + Debug {
         &self,
         name: &str,
         site: &Arc<Site>,
-        collection: Option<&Arc<Collection>>,
+        collection: Option<(&Arc<Collection>, Kind)>,
         item: &Arc<Item>,
     ) -> Result<String>;
 
@@ -31,7 +31,7 @@ pub trait Engine: Send + Sync + Debug {
         name: Option<&str>,
         template_str: &str,
         site: &Arc<Site>,
-        collection: Option<&Arc<Collection>>,
+        collection: Option<(&Arc<Collection>, Kind)>,
         item: &Arc<Item>,
     ) -> Result<String>;
 

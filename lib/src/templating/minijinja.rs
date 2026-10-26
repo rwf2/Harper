@@ -3,7 +3,7 @@ use minijinja::{Environment, path_loader};
 use minijinja::value::{Serde, Value};
 use serde::Serialize;
 
-use crate::taxonomy::{Site, Item, Collection, Metadata};
+use crate::taxonomy::{Site, Item, Collection, Kind, Metadata};
 use crate::error::Result;
 use crate::fstree::{FsTree, EntryId};
 use crate::templating::{Engine, EngineInit};
@@ -16,20 +16,20 @@ pub struct MiniJinjaEngine {
 #[derive(Debug)]
 pub struct SiteItem {
     pub site: Arc<Site>,
-    pub collection: Option<Arc<Collection>>,
+    pub collection: Option<(Arc<Collection>, Kind)>,
     pub item: Arc<Item>,
 }
 
 impl SiteItem {
     pub fn is_index(&self) -> bool {
-        self.collection.as_ref()
-            .and_then(|c| c.index.as_ref())
-            .map_or(false, |i| i.entry.id == self.item.entry.id)
+        matches!(self.collection, Some((_, Kind::Index)))
     }
 
     pub fn position(&self) -> Option<usize> {
-        self.collection.as_ref()
-            .and_then(|c| c.items.iter().position(|i| i.entry.id == self.item.entry.id))
+        match self.collection {
+            Some((_, Kind::Item(i))) => Some(i),
+            _ => None,
+        }
     }
 }
 
@@ -107,14 +107,14 @@ impl Engine for MiniJinjaEngine {
         &self,
         name: &str,
         site: &Arc<Site>,
-        collection: Option<&Arc<Collection>>,
+        collection: Option<(&Arc<Collection>, Kind)>,
         item: &Arc<Item>,
     ) -> Result<String> {
         let env = self.env.as_ref().map_err(|e| e.clone())?;
         let template = env.get_template(name)?;
         let site_item = SiteItem {
             site: site.clone(),
-            collection: collection.cloned(),
+            collection: collection.map(|(c, k)| (c.clone(), k)),
             item: item.clone()
         };
 
@@ -126,13 +126,13 @@ impl Engine for MiniJinjaEngine {
         name: Option<&str>,
         template_str: &str,
         site: &Arc<Site>,
-        collection: Option<&Arc<Collection>>,
+        collection: Option<(&Arc<Collection>, Kind)>,
         item: &Arc<Item>,
     ) -> Result<String> {
         let env = self.env.as_ref().map_err(|e| e.clone())?;
         let site_item = SiteItem {
             site: site.clone(),
-            collection: collection.cloned(),
+            collection: collection.map(|(c, k)| (c.clone(), k)),
             item: item.clone()
         };
 
@@ -364,11 +364,11 @@ mod taxonomy_object {
         fn get_value(self: &Arc<Self>, name: &Value) -> Option<Value> {
             let value = match name.as_str()? {
                 "site" => Value::from_dyn_object(self.site.clone()),
-                "collection" => Value::from_dyn_object(self.collection.as_ref()?.clone()),
+                "collection" => Value::from_dyn_object(self.collection.as_ref()?.0.clone()),
                 "position" => self.position()?.into(),
                 "is_index" => self.is_index().into(),
                 "next" => {
-                    let collection = self.collection.as_ref()?;
+                    let (collection, _) = self.collection.as_ref()?;
                     let j = self.is_index()
                         .then_some(0)
                         .or_else(|| self.position().map(|i| i.saturating_add(1)))?;
@@ -377,7 +377,7 @@ mod taxonomy_object {
                     Value::from_dyn_object(next.clone())
                 },
                 "previous" => {
-                    let collection = self.collection.as_ref()?;
+                    let (collection, _) = self.collection.as_ref()?;
                     let item = match self.position()? {
                         0 => collection.index.as_ref()?,
                         i => collection.items.get(i - 1)?,
