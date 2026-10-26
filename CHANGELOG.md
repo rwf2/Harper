@@ -1,3 +1,11 @@
+# Unreleased
+
+  * The root content collection is always named `/` in `site.collections`.
+    Previously, it was named `""` when `content/` contained an index file.
+  * Data directories in `collection.data` are named by their path relative to
+    the collection, e.g. `2024/team`. Previously, they were named by their
+    file stem, so `v1.2` was `v1`, and same-named directories were ambiguous.
+
 # Version 0.0.3 (Oct 25, 2026)
 
 This is the third testing release of Mockingbird. More details to come.

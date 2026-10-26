@@ -3,11 +3,11 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use rustc_hash::FxBuildHasher;
+
 use crate::value::{Source, Sink};
 use crate::error::Result;
 use crate::value::Value;
-
-type FxHasher = std::hash::BuildHasherDefault<rustc_hash::FxHasher>;
 
 pub trait MetaKey: 'static {
     const KEY: &'static str;
@@ -38,7 +38,7 @@ pub struct Key<'m, 'k, V> {
 
 #[derive(Debug, Clone, Default)]
 pub struct Metadata {
-    pub(crate) map: Arc<dashmap::DashMap<Arc<str>, Value, FxHasher>>,
+    pub(crate) map: Arc<dashmap::DashMap<Arc<str>, Value, FxBuildHasher>>,
 }
 
 impl Metadata {

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use rayon::prelude::*;
 
+use crate::error::Result;
 use crate::fstree::{Entry, EntryId, FsTree, OwnedEntry};
 use crate::util::DuoIndexMap;
 use crate::value::List;
@@ -22,7 +23,7 @@ pub struct Collection {
 pub enum Kind {
     /// An item that's the index.
     Index,
-    /// This is the the entryid of the directory (self.data[entry]) it's in.
+    /// An item in a data directory (`self.data`).
     Data,
     /// The sequence of the item.
     Item(usize),
@@ -49,16 +50,30 @@ impl Collection {
         item
     }
 
-    pub fn new_datum(&mut self, entry: EntryId) -> Arc<Item> {
-        let datum = Arc::new(Item::new(self.entry.tree.clone(), entry));
-        let entry = &self.entry.tree[entry];
-        let parent = &self.entry.tree[entry.parent.unwrap()];
-        self.data
-            .get_or_insert_default(parent.id, || parent.file_name.as_str().into())
-            .expect("unique name/entry combo")
-            .push(datum.clone());
+    /// Fails if the name of `entry`'s directory is already the name of another
+    /// data directory in this collection.
+    pub fn new_datum(&mut self, entry: EntryId) -> Result<Arc<Item>> {
+        let tree = &self.entry.tree;
+        let parent = &tree[tree[entry].parent.unwrap()];
+        let name = || parent.path_relative_to(&self.entry)
+            .unwrap()
+            .to_string_lossy()
+            .into();
 
-        datum
+        match self.data.get_or_insert_default(parent.id, name) {
+            Ok(data) => {
+                let datum = Arc::new(Item::new(tree.clone(), entry));
+                data.push(datum.clone());
+                Ok(datum)
+            }
+            Err(name) => err! {
+                "multiple data directories in a collection have the same name",
+                "collection" => self.name,
+                "name" => name,
+                "directory" => format!("{:?}", parent.path),
+                "note: non-UTF-8 path components are converted lossily",
+            }
+        }
     }
 
     pub fn set_index_item(&mut self, entry: EntryId) -> Arc<Item> {

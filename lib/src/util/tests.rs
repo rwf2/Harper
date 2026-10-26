@@ -10,3 +10,40 @@ fn test_slugify() {
     assert_eq!(slugify("You & Me"), "you-me");
     assert_eq!(slugify("  user@-- example.com  "), "user-example-com");
 }
+
+#[test]
+fn test_duo_index_map() {
+    use rayon::prelude::*;
+    use crate::util::DuoIndexMap;
+
+    let mut map: DuoIndexMap<u32, &str, Vec<u32>> = Default::default();
+    map.get_or_insert_default(1, || "one").unwrap().push(1);
+    map.get_or_insert_default(2, || "two").unwrap().push(2);
+    map.get_or_insert_default(1, || unreachable!()).unwrap().push(10);
+
+    assert_eq!(map.len(), 2);
+    assert_eq!(map.get2("one"), Some(&vec![1, 10]));
+    assert_eq!(map.get2("three"), None);
+    assert_eq!(map.get_mut(&2), Some(&mut vec![2]));
+    assert!(map.contains_pkey(&1) && !map.contains_pkey(&3));
+
+    let mut keys: Vec<_> = map.secondary_keys().copied().collect();
+    keys.sort();
+    assert_eq!(keys, ["one", "two"]);
+
+    let values: Vec<_> = map.par_iter().collect();
+    assert_eq!(values, [&vec![1, 10], &vec![2]]);
+}
+
+#[test]
+fn test_duo_index_map_duplicate_secondary_key() {
+    use crate::util::DuoIndexMap;
+
+    let mut map: DuoIndexMap<u32, &str, Vec<u32>> = Default::default();
+    map.get_or_insert_default(1, || "one").unwrap().push(1);
+    assert_eq!(map.get_or_insert_default(2, || "one"), Err("one"));
+
+    assert_eq!(map.len(), 1);
+    assert!(!map.contains_pkey(&2));
+    assert_eq!(map.get2("one"), Some(&vec![1]));
+}

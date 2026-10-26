@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::path::{Path, PathBuf};
 
 use harper::{err, Collection, Site};
-use harper::fstree::{EntryId, FsTree};
+use harper::fstree::{Entry, EntryId, FsTree};
 use harper::templating::EngineInit;
 use harper::error::Result;
 use harper::templating::minijinja::MiniJinjaEngine;
@@ -79,15 +79,8 @@ impl Mockingbird {
         // Find all collections, as identified by the presence of an index file.
         for index in index_files {
             let group_dir = &self.tree[index.parent.unwrap()];
-            let collection = site.get_or_insert_collection(|| {
-                let rel = group_dir.path_relative_to(content_root)
-                    .unwrap()
-                    .to_string_lossy();
-
-                rel.is_empty()
-                    .then_some("@".into())
-                    .unwrap_or_else(|| rel.into())
-            }, group_dir.id);
+            let name = || self.collection_name(group_dir);
+            let collection = site.get_or_insert_collection(name, group_dir.id)?;
 
             if let Some(ref existing) = collection.index {
                 return err!(
@@ -102,6 +95,16 @@ impl Mockingbird {
         }
 
         Ok(())
+    }
+
+    /// The name of the collection rooted at `dir`: its path relative to the
+    /// content root, or `/` for the content root itself. Unique per `dir`.
+    fn collection_name(&self, dir: &Entry) -> Arc<str> {
+        let path = dir.path_relative_to(&self.tree[self.content_root]).unwrap();
+        match path.as_os_str().is_empty() {
+            true => "/".into(),
+            false => path.to_string_lossy().into(),
+        }
     }
 
     fn parent<'a>(&self, site: &'a mut Site, mut entry: EntryId) -> Option<&'a mut Collection> {
@@ -125,16 +128,22 @@ impl Mockingbird {
         for entry in files {
             let collection = match self.parent(site, entry.id) {
                 Some(collection) => collection,
-                None => site.get_or_insert_collection(|| "/".into(), content_root.id),
+                None => {
+                    let name = || self.collection_name(content_root);
+                    site.get_or_insert_collection(name, content_root.id)?
+                }
             };
 
             if entry.depth - collection.entry.depth <= 1 {
                 collection.new_item(entry.id);
             } else {
-                collection.new_datum(entry.id);
+                collection.new_datum(entry.id)?;
             };
         }
 
         Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests;
