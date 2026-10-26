@@ -311,6 +311,10 @@ mod value_object {
     }
 
     impl<T: Clone + Debug + Into<DynObject> + Sync + Send> Object for value::List<T> {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Seq
+        }
+
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             let item = self.get(key.as_usize()?)?.clone();
             Some(Value::from_dyn_object(item.into()))
@@ -420,6 +424,10 @@ mod taxonomy_object {
     }
 
     impl Object for SiteItems {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Seq
+        }
+
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             let value = self.items.get(key.as_usize()?)?;
             Some(Value::from_dyn_object(value.clone()))
@@ -463,6 +471,10 @@ mod taxonomy_object {
     }
 
     impl Object for CollectionItems {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Seq
+        }
+
         fn get_value(self: &Arc<Self>, value: &Value) -> Option<Value> {
             let item = self.items.get(value.as_usize()?)?;
             Some(Value::from_dyn_object(item.clone()))

@@ -75,6 +75,51 @@ fn metadata_and_list_values() {
 }
 
 #[test]
+fn sequences() {
+    use crate::taxonomy::Site;
+    use crate::value::Value as DataValue;
+
+    let env = environment();
+    let tree = Arc::new(FsTree::build(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")).unwrap());
+    let file = tree.get_file_id(tree.root_id(), "plugins/init.lua").unwrap();
+
+    let mut site = Site::new(tree.clone());
+    let collection = site.get_or_insert_collection(|| "c".into(), tree.root_id()).unwrap();
+    for name in ["a", "b", "c"] {
+        collection.new_item(file).metadata.insert_raw("name", name);
+    }
+
+    for name in ["a", "b", "c"] {
+        site.new_resource(file).metadata.insert_raw("name", name);
+    }
+
+    let site = Arc::new(site);
+    let collection = site.collections.get2("c").unwrap().clone();
+    let context = minijinja::context! {
+        items => Value::from_dyn_object(collection),
+        site => Value::from_dyn_object(site),
+        array => Value::from(DataValue::from(vec!["a", "b", "c"])),
+    };
+
+    for seq in ["items.items", "site.items"] {
+        let rendered = env.render_str(&format!(concat!(
+            "{{{{ {0}[:2] | map(attribute='name') | join(',') }}}}|",
+            "{{{{ {0}[-1].name }}}}|{{{{ ({0} | last).name }}}}|",
+            "{{{{ ({0} | reverse | first).name }}}}|{{{{ {0} | length }}}}|",
+            "{{% if {0} is sequence and {0} is not mapping %}}seq{{% endif %}}|",
+            "{{% if {0}[1] in {0} %}}in{{% endif %}}",
+        ), seq), &context).unwrap();
+        assert_eq!(rendered, "a,b|c|c|c|3|seq|in", "{seq}");
+    }
+
+    let rendered = env.render_str(concat!(
+        "{{ array[1:] | join(',') }}|{{ array[-1] }}|{{ array | last }}|",
+        "{% if 'b' in array and 'z' not in array %}in{% endif %}",
+    ), &context).unwrap();
+    assert_eq!(rendered, "b,c|c|c|in");
+}
+
+#[test]
 #[cfg(feature = "plugins")]
 fn lua_callbacks() {
     let env = environment();

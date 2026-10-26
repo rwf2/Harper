@@ -5,6 +5,11 @@
   * Data directories in `collection.data` are named by their path relative to
     the collection, e.g. `2024/team`. Previously, they were named by their
     file stem, so `v1.2` was `v1`, and same-named directories were ambiguous.
+  * `collection.items`, `site.items`, and arrays are sequences in templates.
+    They can be sliced (`items[:5]`) and indexed from the end (`items[-1]`),
+    and `x in items` tests membership. Previously, they were maps from index
+    to value, so slicing failed, `items[-1]` was undefined, and `x in items`
+    was always false.
 
 # Version 0.0.3 (Oct 25, 2026)
 
