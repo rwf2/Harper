@@ -3,7 +3,8 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use rustc_hash::FxBuildHasher;
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 
 use crate::value::{Source, Sink};
 use crate::error::Result;
@@ -36,41 +37,50 @@ pub struct Key<'m, 'k, V> {
     _value: PhantomData<fn() -> V>,
 }
 
+/// An item's metadata: a small, shared, concurrently accessed map.
+///
+/// The lock is never held while calling out to other code, so concurrent
+/// accesses, including from within templates, cannot deadlock.
 #[derive(Debug, Clone, Default)]
 pub struct Metadata {
-    pub(crate) map: Arc<dashmap::DashMap<Arc<str>, Value, FxBuildHasher>>,
+    map: Arc<RwLock<FxHashMap<Arc<str>, Value>>>,
+}
+
+fn insert<K, V>(map: &mut FxHashMap<Arc<str>, Value>, key: K, value: V) -> Option<Value>
+    where K: Into<Arc<str>> + Borrow<str>, V: Into<Value>
+{
+    match map.get_mut(key.borrow()) {
+        Some(existing) => Some(std::mem::replace(existing, value.into())),
+        None => map.insert(key.into(), value.into()),
+    }
 }
 
 impl Metadata {
     #[inline(always)]
     pub fn get_raw(&self, key: &str) -> Option<Value> {
-        self.map.get(key).map(|v| v.clone())
+        self.map.read().get(key).cloned()
     }
 
     #[inline(always)]
     pub fn contains_key(&self, key: &str) -> bool {
-        self.map.contains_key(key)
+        self.map.read().contains_key(key)
     }
 
     pub fn len(&self) -> usize {
-        self.map.len()
+        self.map.read().len()
     }
 
+    /// A snapshot of the keys at the time of the call.
     #[inline(always)]
     pub fn keys(&self) -> impl Iterator<Item = Arc<str>> + '_ {
-        self.map.iter().map(|r| r.key().clone())
+        let keys: Vec<_> = self.map.read().keys().cloned().collect();
+        keys.into_iter()
     }
 
     pub fn insert_raw<K, V>(&self, key: K, value: V) -> Option<Value>
         where K: Into<Arc<str>> + Borrow<str>, V: Into<Value>
     {
-        let mut value = value.into();
-        if let Some(mut existing) = self.map.get_mut(key.borrow()) {
-            std::mem::swap(&mut *existing, &mut value);
-            Some(value)
-        } else {
-            self.map.insert(key.into(), value)
-        }
+        insert(&mut self.map.write(), key, value)
     }
 }
 
@@ -143,17 +153,18 @@ impl Metadata {
     }
 
     pub fn remove<K: MetaKey>(&self, _: K) -> Option<Value> {
-        self.map.remove(K::KEY).map(|(_, v)| v)
+        self.map.write().remove(K::KEY)
     }
 
     pub fn remove_raw<K: Borrow<str>>(&self, key: K) -> Option<Value> {
-        self.map.remove(key.borrow()).map(|(_, v)| v)
+        self.map.write().remove(key.borrow())
     }
 
     #[inline(always)]
     pub fn append_all(&self, dict: &crate::value::Dict) {
+        let mut map = self.map.write();
         for (k, v) in dict {
-            self.insert_raw(k.clone(), v.clone());
+            insert(&mut map, k.clone(), v.clone());
         }
     }
 
@@ -181,7 +192,7 @@ impl<V> fmt::Debug for Key<'_, '_, V> {
 impl fmt::Display for Metadata {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#?}", self.map)
+        write!(f, "{:#?}", self.map.read())
     }
 }
 

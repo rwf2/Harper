@@ -28,7 +28,6 @@ grass = { version = "0.13.4", default-features = false, features = ["random"], o
 pulldown-cmark = { version = "0.13.5", default-features = false, features = ["simd", "html"] }
 
 parking_lot = "0.13.0"
-dashmap = { version = "6.2.1", features = ["rayon", "inline"] } # is there a better alternative?
 rustc-hash = { version = "2.1.3" }
 boxcar = "0.2.14"
 
