@@ -1,3 +1,8 @@
+# Version 0.0.5 (Nov 18, 2026)
+
+  * Collection and data names use `/` as the separator on all platforms.
+    Previously, they used `\` on Windows.
+
 # Version 0.0.4 (Nov 18, 2026)
 
   * Code is highlighted with tree-sitter, via `jellybean`, instead of
