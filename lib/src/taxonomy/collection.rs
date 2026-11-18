@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::error::Result;
 use crate::fstree::{Entry, EntryId, FsTree, OwnedEntry};
-use crate::util::DuoIndexMap;
+use crate::util::{DuoIndexMap, PathExt};
 use crate::value::List;
 use crate::taxonomy::*;
 
@@ -59,7 +59,7 @@ impl Collection {
         let dir = &tree[dir];
         let name = || dir.path_relative_to(&self.entry)
             .unwrap()
-            .to_string_lossy()
+            .to_slash_lossy()
             .into();
 
         let data = match self.data.get_or_insert_default(dir.id, name) {

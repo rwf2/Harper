@@ -5,6 +5,7 @@ use harper::{err, Site};
 use harper::fstree::{Entry, EntryId, FsTree};
 use harper::templating::EngineInit;
 use harper::error::Result;
+use harper::util::PathExt;
 use harper::templating::minijinja::MiniJinjaEngine;
 
 use crate::{ASSETS_DIR, CONTENT_DIR, TEMPLATE_DIR, PermaPath};
@@ -74,7 +75,7 @@ impl Mockingbird {
         let path = dir.path_relative_to(&self.tree[self.content_root]).unwrap();
         match path.as_os_str().is_empty() {
             true => "/".into(),
-            false => path.to_string_lossy().into(),
+            false => path.to_slash_lossy().into(),
         }
     }
 

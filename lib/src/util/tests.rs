@@ -48,3 +48,18 @@ fn test_duo_index_map_duplicate_secondary_key() {
     // `2` was not inserted, so it's free to take a new key.
     assert_eq!(map.get_or_insert_default(2, || "two"), Ok(&mut vec![]));
 }
+
+#[test]
+fn test_to_slash_lossy() {
+    use std::path::Path;
+    use crate::util::PathExt;
+
+    assert_eq!(Path::new("").to_slash_lossy(), "");
+    assert_eq!(Path::new("team").to_slash_lossy(), "team");
+    assert_eq!(Path::new("2024/team").to_slash_lossy(), "2024/team");
+    assert_eq!(Path::new("2024/team/").to_slash_lossy(), "2024/team");
+    assert_eq!(Path::new("v1.2/team").to_slash_lossy(), "v1.2/team");
+
+    #[cfg(windows)]
+    assert_eq!(Path::new(r"2024\team").to_slash_lossy(), "2024/team");
+}

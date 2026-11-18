@@ -4,6 +4,10 @@ use std::path::{Path, PathBuf, Component};
 pub trait PathExt: AsRef<Path> {
     fn without_extension(&self) -> Cow<'_, Path>;
     fn with_root<P: AsRef<Path>>(&self, path: P) -> PathBuf;
+
+    /// Lossily converts `self` to a string using `/` as the separator on every
+    /// platform. Meant for relative paths, such as the names of collections.
+    fn to_slash_lossy(&self) -> String;
 }
 
 impl PathExt for Path {
@@ -42,5 +46,12 @@ impl PathExt for Path {
             .components()
             .chain(self.components().filter(|c| matches!(c, Component::Normal(_))))
             .collect()
+    }
+
+    fn to_slash_lossy(&self) -> String {
+        self.components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
     }
 }
