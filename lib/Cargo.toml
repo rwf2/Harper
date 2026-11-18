@@ -1,6 +1,6 @@
 [package]
 name = "harper"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
@@ -47,8 +47,7 @@ default-features = false
 features = ["alloc", "std"]
 
 [dependencies.jellybean]
-version = "0.0.2"
-path = "../../jeallybean/lib"
+version = "0.0.3"
 default-features = false
 features = [
     "precached",

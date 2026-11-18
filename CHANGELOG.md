@@ -1,5 +1,9 @@
-# Unreleased
+# Version 0.0.4 (Nov 18, 2026)
 
+  * Code is highlighted with tree-sitter, via `jellybean`, instead of
+    `syntect`. Highlighted spans are classed by capture name, one class per
+    part: `function.macro` is `<span class="function macro">`. Code in an
+    unknown language is escaped and left unhighlighted.
   * The root content collection is always named `/` in `site.collections`.
     Previously, it was named `""` when `content/` contained an index file.
   * Data directories in `collection.data` are named by their path relative to
